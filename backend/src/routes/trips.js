@@ -75,4 +75,61 @@ router.get('/:id', authGuard, async (req, res) => {
   }
 });
 
+const { generateTripPlan } = require('../services/gemini');
+
+// GENERATE TRIP PLAN
+router.post('/:id/plan', authGuard, async (req, res) => {
+  try {
+    // Get trip details
+    const tripResult = await pool.query(
+      'SELECT * FROM trips WHERE id = $1 AND user_id = $2',
+      [req.params.id, req.userId]
+    );
+
+    if (tripResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Trip not found' });
+    }
+
+    const trip = tripResult.rows[0];
+
+    // Generate plan with Gemini
+    const stops = await generateTripPlan(trip);
+
+    // Save stops to DB
+    const savedStops = [];
+    for (const stop of stops) {
+      const result = await pool.query(
+        `INSERT INTO trip_stops 
+          (trip_id, stop_type, suggested_time, sequence_order, notes)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING *`,
+        [
+          trip.id,
+          stop.stop_type,
+          stop.suggested_time,
+          stop.sequence,
+          `${stop.location_description} | ${stop.notes} | Category: ${stop.price_category}`
+        ]
+      );
+      savedStops.push(result.rows[0]);
+    }
+
+    // Update trip status
+    await pool.query(
+      "UPDATE trips SET status = 'planned' WHERE id = $1",
+      [trip.id]
+    );
+
+    res.json({
+      trip,
+      stops: savedStops,
+      raw_plan: stops
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to generate plan: ' + err.message });
+  }
+});
+
 module.exports = router;
