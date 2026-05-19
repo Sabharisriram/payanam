@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../models/db');
 const authGuard = require('../middleware/authGuard');
+const { geocodeLocation, findNearbyPlaces } = require('../services/maps');
+const { rankPlacesForTripType } = require('../services/scoring');
 
 // CREATE TRIP
 router.post('/', authGuard, async (req, res) => {
@@ -95,9 +97,30 @@ router.post('/:id/plan', authGuard, async (req, res) => {
     // Generate plan with Gemini
     const stops = await generateTripPlan(trip);
 
-    // Save stops to DB
+    // Save stops to DB with real nearby places
     const savedStops = [];
     for (const stop of stops) {
+      // Geocode the stop location
+      const coords = await geocodeLocation(stop.location_description);
+
+      let nearbyPlaces = [];
+      if (coords) {
+        // Find real nearby places
+        const rawPlaces = await findNearbyPlaces(coords.lat, coords.lng, stop.place_type);
+        // Rank based on trip type
+        nearbyPlaces = rankPlacesForTripType(rawPlaces, trip.trip_type, stop.stop_type);
+
+        // Save top places to places table
+        for (const place of nearbyPlaces.slice(0, 3)) {
+          await pool.query(
+            `INSERT INTO places (name, lat, lng, place_type, our_score, price_category)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             ON CONFLICT DO NOTHING`,
+            [place.name, place.lat, place.lng, place.amenity, place.our_score, place.price_category]
+          );
+        }
+      }
+
       const result = await pool.query(
         `INSERT INTO trip_stops 
           (trip_id, stop_type, suggested_time, sequence_order, notes)
@@ -111,7 +134,12 @@ router.post('/:id/plan', authGuard, async (req, res) => {
           `${stop.location_description} | ${stop.notes} | Category: ${stop.price_category}`
         ]
       );
-      savedStops.push(result.rows[0]);
+
+      savedStops.push({
+        ...result.rows[0],
+        nearby_places: nearbyPlaces.slice(0, 3),
+        coords
+      });
     }
 
     // Update trip status
