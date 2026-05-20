@@ -3,9 +3,15 @@ const axios = require('axios');
 // Convert location name to coordinates using Nominatim
 async function geocodeLocation(locationName) {
   try {
+    // Extract just the key place name (last meaningful part)
+    const cleaned = locationName
+      .replace(/roadside stall|near|just after|on the way to|viewpoint on|local cafe or tea shop near/gi, '')
+      .split(',')[0]
+      .trim();
+
     const response = await axios.get('https://nominatim.openstreetmap.org/search', {
       params: {
-        q: locationName + ', Tamil Nadu, India',
+        q: cleaned + ', Tamil Nadu, India',
         format: 'json',
         limit: 1
       },
@@ -30,7 +36,6 @@ async function geocodeLocation(locationName) {
 // Find nearby places using Overpass API
 async function findNearbyPlaces(lat, lng, placeType) {
   try {
-    // Map our place types to OSM amenity tags
     const amenityMap = {
       'restaurant': 'restaurant',
       'tea stall': 'cafe',
@@ -39,40 +44,45 @@ async function findNearbyPlaces(lat, lng, placeType) {
       'cafe': 'cafe',
       'dhaba': 'restaurant',
       'viewpoint': 'viewpoint',
+      'meal': 'restaurant',
       'default': 'restaurant'
     };
 
-    const amenity = amenityMap[placeType] || amenityMap['default'];
-    const radius = 2000; // 2km radius
+    const amenity = amenityMap[placeType.toLowerCase()] || amenityMap['default'];
 
-    const query = `
-      [out:json][timeout:25];
-      node["amenity"="${amenity}"](around:${radius},${lat},${lng});
-      out body 5;
-    `;
+    // Create a bounding box ~3km around the point
+    const delta = 0.03;
+    const viewbox = `${lng - delta},${lat + delta},${lng + delta},${lat - delta}`;
 
-    const response = await axios.post(
-      'https://overpass-api.de/api/interpreter',
-      query,
-      { headers: { 'Content-Type': 'text/plain' } }
-    );
+    const response = await axios.get('https://nominatim.openstreetmap.org/search', {
+      params: {
+        q: amenity,
+        format: 'json',
+        limit: 5,
+        viewbox: viewbox,
+        bounded: 1,
+        addressdetails: 1
+      },
+      headers: {
+        'User-Agent': 'Payanam/1.0 (travel planning app; contact@payanam.app)'
+      }
+    });
 
-    const places = response.data.elements.map(place => ({
-      name: place.tags.name || 'Unknown',
-      lat: place.lat,
-      lng: place.lon,
-      amenity: place.tags.amenity,
-      cuisine: place.tags.cuisine || null,
-      opening_hours: place.tags.opening_hours || null,
-      google_place_id: null,
-      our_score: calculateScore(place.tags),
-      price_category: guessPriceCategory(place.tags, placeType)
+    const places = response.data.map(place => ({
+      name: place.display_name.split(',')[0],
+      lat: parseFloat(place.lat),
+      lng: parseFloat(place.lon),
+      amenity: amenity,
+      cuisine: null,
+      opening_hours: null,
+      our_score: calculateScore({}),
+      price_category: guessPriceCategory({}, placeType)
     }));
 
-    return places.filter(p => p.name !== 'Unknown');
+    return places;
 
   } catch (err) {
-    console.error('Overpass error:', err.message);
+    console.error('Places search error:', err.message);
     return [];
   }
 }

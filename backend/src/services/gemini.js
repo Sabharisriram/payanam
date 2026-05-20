@@ -25,8 +25,18 @@ Trip Type: ${trip_type}
 Vehicle: ${vehicle_type}
 Members: ${member_count}
 
-Return ONLY a valid JSON array, no markdown, no extra text:
-[{"sequence":1,"stop_type":"tea","suggested_time":"07:00","location_description":"location here","place_type":"tea stall","price_category":"budget","notes":"notes here"}]`;
+Return ONLY a valid JSON array, no markdown, no extra text.
+Each stop must have a "search_location" field with a simple searchable town or area name only (e.g. "Mettupalayam" not a long description):
+[{
+  "sequence": 1,
+  "stop_type": "tea",
+  "suggested_time": "07:00",
+  "location_description": "brief description",
+  "search_location": "Mettupalayam",
+  "place_type": "cafe",
+  "price_category": "budget",
+  "notes": "short note"
+}]`;
 
   const result = await model.generateContent(prompt);
   const text = result.response.text();

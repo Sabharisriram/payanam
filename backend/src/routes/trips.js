@@ -101,8 +101,8 @@ router.post('/:id/plan', authGuard, async (req, res) => {
     const savedStops = [];
     for (const stop of stops) {
       // Geocode the stop location
-      const coords = await geocodeLocation(stop.location_description);
-
+      const coords = await geocodeLocation(stop.search_location || stop.location_description);
+      
       let nearbyPlaces = [];
       if (coords) {
         // Find real nearby places
