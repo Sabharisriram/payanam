@@ -4,6 +4,7 @@ const pool = require('../models/db');
 const authGuard = require('../middleware/authGuard');
 const { geocodeLocation, findNearbyPlaces } = require('../services/maps');
 const { rankPlacesForTripType } = require('../services/scoring');
+const { generateTripPlan } = require('../services/gemini');
 
 // CREATE TRIP
 router.post('/', authGuard, async (req, res) => {
@@ -77,12 +78,9 @@ router.get('/:id', authGuard, async (req, res) => {
   }
 });
 
-const { generateTripPlan } = require('../services/gemini');
-
 // GENERATE TRIP PLAN
 router.post('/:id/plan', authGuard, async (req, res) => {
   try {
-    // Get trip details
     const tripResult = await pool.query(
       'SELECT * FROM trips WHERE id = $1 AND user_id = $2',
       [req.params.id, req.userId]
@@ -94,23 +92,22 @@ router.post('/:id/plan', authGuard, async (req, res) => {
 
     const trip = tripResult.rows[0];
 
+    // Clear existing stops before regenerating
+    await pool.query('DELETE FROM trip_stops WHERE trip_id = $1', [trip.id]);
+
     // Generate plan with Gemini
     const stops = await generateTripPlan(trip);
 
     // Save stops to DB with real nearby places
     const savedStops = [];
     for (const stop of stops) {
-      // Geocode the stop location
       const coords = await geocodeLocation(stop.search_location || stop.location_description);
-      
+
       let nearbyPlaces = [];
       if (coords) {
-        // Find real nearby places
         const rawPlaces = await findNearbyPlaces(coords.lat, coords.lng, stop.place_type);
-        // Rank based on trip type
         nearbyPlaces = rankPlacesForTripType(rawPlaces, trip.trip_type, stop.stop_type);
 
-        // Save top places to places table
         for (const place of nearbyPlaces.slice(0, 3)) {
           await pool.query(
             `INSERT INTO places (name, lat, lng, place_type, our_score, price_category)
@@ -142,7 +139,6 @@ router.post('/:id/plan', authGuard, async (req, res) => {
       });
     }
 
-    // Update trip status
     await pool.query(
       "UPDATE trips SET status = 'planned' WHERE id = $1",
       [trip.id]
@@ -157,6 +153,20 @@ router.post('/:id/plan', authGuard, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to generate plan: ' + err.message });
+  }
+});
+
+// GET TRIP STOPS
+router.get('/:id/stops', authGuard, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM trip_stops WHERE trip_id = $1 ORDER BY sequence_order ASC`,
+      [req.params.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
