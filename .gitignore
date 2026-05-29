@@ -3,3 +3,4 @@
 *.log
 backend/node_modules/
 backend/.env
+mobile/node_modules/
