@@ -156,8 +156,10 @@ export default function PlanTripScreen({ navigation }) {
         >
           {loading ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator color="#fff" />
-              <Text style={styles.loadingText}>Generating your plan...</Text>
+                <ActivityIndicator color="#fff" size="large" />
+                <Text style={styles.loadingText}>✨ Generating your plan...</Text>
+                <Text style={styles.loadingSubText}>Finding best stops along the route</Text>
+                <Text style={styles.loadingSubText}>This takes about 20 seconds</Text>
             </View>
           ) : (
             <Text style={styles.buttonText}>Generate Trip Plan ✨</Text>
@@ -193,5 +195,6 @@ const styles = StyleSheet.create({
   },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
   loadingContainer: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  loadingText: { color: '#fff', fontSize: 15 }
+  loadingText: { color: '#fff', fontSize: 15 },
+  loadingSubText: { color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 4 }
 });

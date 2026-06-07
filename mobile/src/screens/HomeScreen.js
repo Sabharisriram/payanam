@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  FlatList, ActivityIndicator, SafeAreaView
+  FlatList, ActivityIndicator, SafeAreaView, Alert
 } from 'react-native';
 import useAuthStore from '../store/authStore';
-import { getTrips } from '../api/trips';
+import { getTrips, deleteTrip } from '../api/trips';
 
 export default function HomeScreen({ navigation }) {
   const { user, logout } = useAuthStore();
@@ -26,6 +26,28 @@ export default function HomeScreen({ navigation }) {
     }
   };
 
+  const handleDelete = async (tripId) => {
+    Alert.alert(
+      'Delete Trip',
+      'Are you sure you want to delete this trip?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteTrip(tripId);
+              setTrips(trips.filter(t => t.id !== tripId));
+            } catch (err) {
+              Alert.alert('Error', 'Failed to delete trip');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const renderTrip = ({ item }) => (
     <TouchableOpacity
       style={styles.tripCard}
@@ -38,10 +60,18 @@ export default function HomeScreen({ navigation }) {
       <Text style={styles.tripMeta}>
         {item.trip_type} · {item.vehicle_type} · {item.member_count} members
       </Text>
-      <View style={[styles.badge,
-        item.status === 'planned' ? styles.badgePlanned : styles.badgePending
-      ]}>
-        <Text style={styles.badgeText}>{item.status}</Text>
+      <View style={styles.cardFooter}>
+        <View style={[styles.badge,
+          item.status === 'planned' ? styles.badgePlanned : styles.badgePending
+        ]}>
+          <Text style={styles.badgeText}>{item.status}</Text>
+        </View>
+        <TouchableOpacity
+          onPress={() => handleDelete(item.id)}
+          style={styles.deleteBtn}
+        >
+          <Text style={styles.deleteBtnText}>Delete</Text>
+        </TouchableOpacity>
       </View>
     </TouchableOpacity>
   );
@@ -107,9 +137,15 @@ const styles = StyleSheet.create({
   tripName: { color: '#fff', fontSize: 16, fontWeight: 'bold', marginBottom: 4 },
   tripDetail: { color: '#f97316', fontSize: 14, marginBottom: 4 },
   tripMeta: { color: '#94a3b8', fontSize: 12, marginBottom: 8 },
+  cardFooter: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   badge: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 20 },
   badgePlanned: { backgroundColor: '#166534' },
   badgePending: { backgroundColor: '#1e3a5f' },
   badgeText: { color: '#fff', fontSize: 11 },
+  deleteBtn: {
+    borderWidth: 1, borderColor: '#ef4444',
+    borderRadius: 6, paddingHorizontal: 10, paddingVertical: 3
+  },
+  deleteBtnText: { color: '#ef4444', fontSize: 12 },
   empty: { color: '#94a3b8', textAlign: 'center', marginTop: 60, fontSize: 15 }
 });

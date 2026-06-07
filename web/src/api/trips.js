@@ -24,3 +24,7 @@ export const getTripStops = async (tripId) => {
   const response = await client.get(`/trips/${tripId}/stops`);
   return response.data;
 };
+export const deleteTrip = async (id) => {
+  const response = await client.delete(`/trips/${id}`);
+  return response.data;
+};

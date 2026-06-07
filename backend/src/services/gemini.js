@@ -41,7 +41,13 @@ Each stop must have a "search_location" field with a simple searchable town or a
   const result = await model.generateContent(prompt);
   const text = result.response.text();
   const cleaned = text.replace(/```json|```/g, '').trim();
-  return JSON.parse(cleaned);
+
+  try {
+    return JSON.parse(cleaned);
+  } catch (parseErr) {
+    console.error('Gemini response was not valid JSON:', cleaned.slice(0, 200));
+    throw new Error('Gemini returned invalid response. Please try again.');
+  }
 }
 
 module.exports = { generateTripPlan };

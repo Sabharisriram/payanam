@@ -102,7 +102,12 @@ export default function PlanTripPage() {
           </div>
 
           <button style={styles.button} type="submit" disabled={loading}>
-            {loading ? '✨ Generating your plan...' : 'Generate Trip Plan ✨'}
+            {loading ? (
+                <div style={styles.loadingBox}>
+                    <div style={styles.spinner}></div>
+                    <span>Generating your plan... this takes ~20 seconds</span>
+                </div>
+            ) : 'Generate Trip Plan ✨'}
           </button>
         </form>
       </div>
@@ -136,5 +141,16 @@ const styles = {
     backgroundColor: '#f97316', color: '#fff',
     borderRadius: 12, fontSize: 16, fontWeight: 'bold'
   },
-  error: { color: '#ef4444', marginBottom: 16 }
+  error: { color: '#ef4444', marginBottom: 16 },
+  loadingBox: {
+    display: 'flex', alignItems: 'center',
+    justifyContent: 'center', gap: 12
+  },
+  spinner: {
+    width: 20, height: 20,
+    border: '3px solid rgba(255,255,255,0.3)',
+    borderTop: '3px solid #fff',
+    borderRadius: '50%',
+    animation: 'spin 1s linear infinite'
+  }
 };

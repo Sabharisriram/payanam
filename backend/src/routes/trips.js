@@ -170,4 +170,21 @@ router.get('/:id/stops', authGuard, async (req, res) => {
   }
 });
 
+// DELETE TRIP
+router.delete('/:id', authGuard, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'DELETE FROM trips WHERE id = $1 AND user_id = $2 RETURNING id',
+      [req.params.id, req.userId]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Trip not found' });
+    }
+    res.json({ message: 'Trip deleted successfully' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 module.exports = router;

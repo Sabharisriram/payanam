@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
-import { getTrips } from '../api/trips';
+import { getTrips, deleteTrip } from '../api/trips';
 
 export default function HomePage() {
   const { user, logout } = useAuthStore();
@@ -29,11 +29,21 @@ export default function HomePage() {
     navigate('/login');
   };
 
+  const handleDelete = async (e, tripId) => {
+    e.stopPropagation();
+    if (!window.confirm('Delete this trip?')) return;
+    try {
+      await deleteTrip(tripId);
+      setTrips(trips.filter(t => t.id !== tripId));
+    } catch (err) {
+      alert('Failed to delete trip');
+    }
+  };
+
   return (
     <div style={styles.container}>
       <div style={styles.inner}>
 
-        {/* Header */}
         <div style={styles.header}>
           <div>
             <h2 style={styles.greeting}>வணக்கம், {user?.name} 👋</h2>
@@ -42,12 +52,10 @@ export default function HomePage() {
           <button style={styles.logoutBtn} onClick={handleLogout}>Logout</button>
         </div>
 
-        {/* Plan button */}
         <button style={styles.planBtn} onClick={() => navigate('/plan')}>
           + Plan a New Trip
         </button>
 
-        {/* Trips list */}
         <p style={styles.sectionTitle}>Your Trips</p>
 
         {loading ? (
@@ -66,12 +74,20 @@ export default function HomePage() {
               <p style={styles.tripMeta}>
                 {trip.trip_type} · {trip.vehicle_type} · {trip.member_count} members
               </p>
-              <span style={{
-                ...styles.badge,
-                backgroundColor: trip.status === 'planned' ? '#166534' : '#1e3a5f'
-              }}>
-                {trip.status}
-              </span>
+              <div style={styles.cardFooter}>
+                <span style={{
+                  ...styles.badge,
+                  backgroundColor: trip.status === 'planned' ? '#166534' : '#1e3a5f'
+                }}>
+                  {trip.status}
+                </span>
+                <button
+                  style={styles.deleteBtn}
+                  onClick={(e) => handleDelete(e, trip.id)}
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           ))
         )}
@@ -109,9 +125,15 @@ const styles = {
   tripName: { color: '#fff', fontSize: 17, marginBottom: 4 },
   tripRoute: { color: '#f97316', fontSize: 14, marginBottom: 4 },
   tripMeta: { color: '#94a3b8', fontSize: 12, marginBottom: 8 },
+  cardFooter: { display: 'flex', alignItems: 'center', gap: 10 },
   badge: {
     display: 'inline-block', padding: '3px 10px',
     borderRadius: 20, color: '#fff', fontSize: 11
+  },
+  deleteBtn: {
+    backgroundColor: 'transparent', color: '#ef4444',
+    fontSize: 12, border: '1px solid #ef4444',
+    borderRadius: 6, padding: '3px 10px', cursor: 'pointer'
   },
   empty: { color: '#94a3b8', textAlign: 'center', marginTop: 60 }
 };
