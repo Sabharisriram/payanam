@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useParams, useLocation, useNavigate } from 'react-router-dom';
-import { getTrip, getTripStops } from '../api/trips';
+import { useParams, useNavigate } from 'react-router-dom';
+import { getTrip, getTripStops, generatePlan } from '../api/trips';
 
 const STOP_ICONS = {
   tea: '☕', breakfast: '🍳', lunch: '🍽️', dinner: '🌙',
@@ -17,11 +17,11 @@ const CATEGORY_COLORS = {
 
 export default function TripPlanPage() {
   const { id } = useParams();
-  const location = useLocation();
   const navigate = useNavigate();
   const [trip, setTrip] = useState(null);
   const [stops, setStops] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -39,6 +39,18 @@ export default function TripPlanPage() {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGenerate = async () => {
+    setGenerating(true);
+    try {
+      await generatePlan(id);
+      await loadData();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setGenerating(false);
     }
   };
 
@@ -67,6 +79,19 @@ export default function TripPlanPage() {
         )}
 
         <p style={styles.sectionTitle}>Your Trip Plan ({stops.length} stops)</p>
+
+        {stops.length === 0 && (
+          <div style={styles.emptyPlan}>
+            <p style={styles.emptyText}>No plan generated yet.</p>
+            <button
+              style={styles.generateBtn}
+              onClick={handleGenerate}
+              disabled={generating}
+            >
+              {generating ? '✨ Generating... (~20 seconds)' : 'Generate Plan ✨'}
+            </button>
+          </div>
+        )}
 
         {stops.map((stop, index) => {
           const icon = STOP_ICONS[stop.stop_type?.toLowerCase()] || '📍';
@@ -127,6 +152,13 @@ const styles = {
   tripRoute: { color: '#f97316', fontSize: 15, marginBottom: 4 },
   tripMeta: { color: '#94a3b8', fontSize: 13 },
   sectionTitle: { color: '#94a3b8', fontSize: 13, marginBottom: 16 },
+  emptyPlan: { textAlign: 'center', marginTop: 60 },
+  emptyText: { color: '#94a3b8', marginBottom: 16 },
+  generateBtn: {
+    backgroundColor: '#f97316', color: '#fff',
+    padding: '12px 24px', borderRadius: 10,
+    fontSize: 15, fontWeight: 'bold'
+  },
   stopCard: {
     backgroundColor: '#1e293b', borderRadius: 12,
     padding: 14, marginBottom: 12,
