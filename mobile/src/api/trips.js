@@ -28,3 +28,13 @@ export const deleteTrip = async (id) => {
   const response = await client.delete(`/trips/${id}`);
   return response.data;
 };
+
+export const submitReview = async (tripId, stopId, reviewData) => {
+  const response = await client.post(`/trips/${tripId}/stops/${stopId}/review`, reviewData);
+  return response.data;
+};
+
+export const completeTrip = async (tripId) => {
+  const response = await client.patch(`/trips/${tripId}/complete`);
+  return response.data;
+};

@@ -178,6 +178,18 @@ export default function LiveTripScreen({ route, navigation }) {
           </Text>
         </TouchableOpacity>
 
+        {!isTracking && (
+          <TouchableOpacity
+            style={styles.reviewButton}
+            onPress={() => navigation.navigate('ReviewTrip', {
+              tripId: tripId,
+              tripName: tripName
+            })}
+          >
+            <Text style={styles.reviewButtonText}>⭐ Rate This Trip</Text>
+          </TouchableOpacity>
+        )}
+
       </ScrollView>
     </SafeAreaView>
   );
@@ -226,5 +238,11 @@ const styles = StyleSheet.create({
   },
   startButton: { backgroundColor: '#16a34a' },
   stopButton: { backgroundColor: '#dc2626' },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' }
+  buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  reviewButton: {
+    backgroundColor: '#1e293b', borderRadius: 12,
+    padding: 16, alignItems: 'center', marginTop: 12,
+    borderWidth: 1, borderColor: '#f97316'
+  },
+  reviewButtonText: { color: '#f97316', fontSize: 15, fontWeight: 'bold' },
 });

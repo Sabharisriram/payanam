@@ -187,4 +187,62 @@ router.delete('/:id', authGuard, async (req, res) => {
   }
 });
 
+// SUBMIT REVIEW FOR A STOP
+router.post('/:tripId/stops/:stopId/review', authGuard, async (req, res) => {
+  try {
+    const { rating, cleanliness_rating, food_quality, comment } = req.body;
+    const { tripId, stopId } = req.params;
+
+    // Get the stop to find place_id
+    const stopResult = await pool.query(
+      'SELECT * FROM trip_stops WHERE id = $1 AND trip_id = $2',
+      [stopId, tripId]
+    );
+
+    if (stopResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Stop not found' });
+    }
+
+    // Get trip type
+    const tripResult = await pool.query(
+      'SELECT trip_type FROM trips WHERE id = $1',
+      [tripId]
+    );
+
+    const trip_type = tripResult.rows[0]?.trip_type;
+
+    // Save review
+    const result = await pool.query(
+      `INSERT INTO reviews 
+        (user_id, trip_id, rating, cleanliness_rating, food_quality, comment, trip_type)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING *`,
+      [req.userId, tripId, rating, cleanliness_rating, food_quality, comment, trip_type]
+    );
+
+    res.status(201).json(result.rows[0]);
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// MARK TRIP AS COMPLETED
+router.patch('/:id/complete', authGuard, async (req, res) => {
+  try {
+    const result = await pool.query(
+      "UPDATE trips SET status = 'completed' WHERE id = $1 AND user_id = $2 RETURNING *",
+      [req.params.id, req.userId]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Trip not found' });
+    }
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 module.exports = router;
