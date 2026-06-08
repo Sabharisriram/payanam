@@ -140,6 +140,16 @@ export default function TripPlanScreen({ route, navigation }) {
           </View>
         )}
 
+        <TouchableOpacity
+          style={styles.liveButton}
+          onPress={() => navigation.navigate('LiveTrip', {
+            tripId: tripId,
+            tripName: trip?.trip_name || 'Trip'
+          })}
+        >
+          <Text style={styles.liveButtonText}>▶ Start Live Trip</Text>
+        </TouchableOpacity>
+
         <Text style={styles.sectionTitle}>
           Your Trip Plan ({stops.length} stops)
         </Text>
@@ -189,5 +199,10 @@ const styles = StyleSheet.create({
     alignItems: 'center', marginBottom: 4
   },
   placeName: { color: '#fff', fontSize: 13, flex: 1 },
-  placeScore: { color: '#f97316', fontSize: 12 }
+  placeScore: { color: '#f97316', fontSize: 12 },
+  liveButton: {
+    backgroundColor: '#16a34a', borderRadius: 12,
+    padding: 14, alignItems: 'center', marginBottom: 16
+  },
+  liveButtonText: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
 });

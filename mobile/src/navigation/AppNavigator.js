@@ -9,6 +9,7 @@ import PlanTripScreen from '../screens/PlanTripScreen';
 import TripPlanScreen from '../screens/TripPlanScreen';
 
 import useAuthStore from '../store/authStore';
+import LiveTripScreen from '../screens/LiveTripScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -28,6 +29,7 @@ export default function AppNavigator() {
             <Stack.Screen name="Home" component={HomeScreen} />
             <Stack.Screen name="PlanTrip" component={PlanTripScreen} />
             <Stack.Screen name="TripPlan" component={TripPlanScreen} />
+            <Stack.Screen name="LiveTrip" component={LiveTripScreen} />
           </>
         )}
       </Stack.Navigator>
