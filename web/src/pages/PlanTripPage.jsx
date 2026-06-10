@@ -4,6 +4,12 @@ import { createTrip, generatePlan } from '../api/trips';
 
 const TRIP_TYPES = ['solo', 'family', 'friends', 'boys', 'bachelor'];
 const VEHICLES = ['car', 'bike', 'bus', 'auto'];
+const PLANNING_MODES = ['essential', 'sightseeing', 'customized'];
+const MODE_DESCRIPTIONS = {
+  essential: 'Tea, breakfast, lunch, snack & dinner only — no sightseeing',
+  sightseeing: 'Meals + 2 real sightseeing spots along the route',
+  customized: 'Enter your own places — meals planned around them',
+};
 
 export default function PlanTripPage() {
   const [tripName, setTripName] = useState('');
@@ -14,6 +20,9 @@ export default function PlanTripPage() {
   const [tripType, setTripType] = useState('family');
   const [vehicle, setVehicle] = useState('car');
   const [members, setMembers] = useState('1');
+  const [tripDays, setTripDays] = useState('1');
+  const [planningMode, setPlanningMode] = useState('sightseeing');
+  const [customPlaces, setCustomPlaces] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
@@ -35,7 +44,10 @@ export default function PlanTripPage() {
         start_time: startTime,
         trip_type: tripType,
         vehicle_type: vehicle,
-        member_count: parseInt(members)
+        member_count: parseInt(members),
+        trip_days: parseInt(tripDays),
+        planning_mode: planningMode,
+        custom_places: planningMode === 'customized' ? customPlaces : null,
       });
       const plan = await generatePlan(trip.id);
       navigate(`/trip/${trip.id}`, { state: { plan } });
@@ -75,9 +87,14 @@ export default function PlanTripPage() {
           <input style={styles.input} type="time"
             value={startTime} onChange={(e) => setStartTime(e.target.value)} />
 
-          <label style={styles.label}>Members</label>
+          <label style={styles.label}>Number of Members</label>
           <input style={styles.input} type="number" min="1" max="20"
             value={members} onChange={(e) => setMembers(e.target.value)} />
+
+          <label style={styles.label}>Number of Days</label>
+          <input style={styles.input} type="number" min="1" max="30"
+            placeholder="e.g. 2"
+            value={tripDays} onChange={(e) => setTripDays(e.target.value)} />
 
           <label style={styles.label}>Trip Type</label>
           <div style={styles.chips}>
@@ -101,12 +118,37 @@ export default function PlanTripPage() {
             ))}
           </div>
 
+          <label style={styles.label}>Planning Mode</label>
+          <div style={styles.chips}>
+            {PLANNING_MODES.map(m => (
+              <button key={m} type="button"
+                style={{ ...styles.chip, ...(planningMode === m ? styles.chipActive : {}) }}
+                onClick={() => setPlanningMode(m)}>
+                {m.charAt(0).toUpperCase() + m.slice(1)}
+              </button>
+            ))}
+          </div>
+          <p style={styles.modeDesc}>{MODE_DESCRIPTIONS[planningMode]}</p>
+
+          {planningMode === 'customized' && (
+            <>
+              <label style={styles.label}>Your Places (one per line)</label>
+              <textarea
+                style={styles.textarea}
+                placeholder={'e.g. Pykara Lake, Ooty\nEmerald Dam\nDoddabetta Peak'}
+                value={customPlaces}
+                onChange={(e) => setCustomPlaces(e.target.value)}
+                rows={4}
+              />
+            </>
+          )}
+
           <button style={styles.button} type="submit" disabled={loading}>
             {loading ? (
-                <div style={styles.loadingBox}>
-                    <div style={styles.spinner}></div>
-                    <span>Generating your plan... this takes ~20 seconds</span>
-                </div>
+              <div style={styles.loadingBox}>
+                <div style={styles.spinner}></div>
+                <span>Generating your plan... this takes ~20 seconds</span>
+              </div>
             ) : 'Generate Trip Plan ✨'}
           </button>
         </form>
@@ -142,6 +184,15 @@ const styles = {
     borderRadius: 12, fontSize: 16, fontWeight: 'bold'
   },
   error: { color: '#ef4444', marginBottom: 16 },
+  modeDesc: { color: '#64748b', fontSize: 12, marginTop: -8, marginBottom: 14 },
+  textarea: {
+    width: '100%', padding: '13px 16px',
+    backgroundColor: '#1e293b', border: '1px solid #334155',
+    borderRadius: 10, color: '#fff', fontSize: 14,
+    marginBottom: 14, display: 'block',
+    resize: 'vertical', fontFamily: 'inherit',
+    boxSizing: 'border-box',
+  },
   loadingBox: {
     display: 'flex', alignItems: 'center',
     justifyContent: 'center', gap: 12

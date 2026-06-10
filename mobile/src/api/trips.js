@@ -16,7 +16,7 @@ export const getTrip = async (id) => {
 };
 
 export const generatePlan = async (tripId) => {
-  const response = await client.post(`/trips/${tripId}/plan`);
+  const response = await client.post(`/trips/${tripId}/plan`, {}, { timeout: 120000 });
   return response.data;
 };
 
@@ -36,5 +36,14 @@ export const submitReview = async (tripId, stopId, reviewData) => {
 
 export const completeTrip = async (tripId) => {
   const response = await client.patch(`/trips/${tripId}/complete`);
+  return response.data;
+};
+
+export const voiceCommand = async (tripId, commandText) => {
+  const response = await client.post(
+    `/trips/${tripId}/voice-command`,
+    { command: commandText },
+    { timeout: 30000 }
+  );
   return response.data;
 };

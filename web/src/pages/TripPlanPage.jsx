@@ -62,6 +62,8 @@ export default function TripPlanPage() {
     );
   }
 
+  const days = Array.from(new Set(stops.map(s => s.day_number || 1))).sort((a, b) => a - b);
+
   return (
     <div style={styles.container}>
       <div style={styles.inner}>
@@ -73,7 +75,7 @@ export default function TripPlanPage() {
             <h2 style={styles.tripName}>{trip.trip_name}</h2>
             <p style={styles.tripRoute}>{trip.start_location} → {trip.end_location}</p>
             <p style={styles.tripMeta}>
-              {trip.trip_type} · {trip.vehicle_type} · {trip.member_count} members
+              {trip.trip_type} · {trip.vehicle_type} · {trip.member_count} members · {trip.trip_days || 1} day(s)
             </p>
           </div>
         )}
@@ -93,42 +95,50 @@ export default function TripPlanPage() {
           </div>
         )}
 
-        {stops.map((stop, index) => {
-          const icon = STOP_ICONS[stop.stop_type?.toLowerCase()] || '📍';
-          const notes = stop.notes?.split('|') || [];
-          const location = notes[0]?.trim();
-          const description = notes[1]?.trim();
-          const category = stop.notes?.includes('Category:')
-            ? stop.notes.split('Category:')[1]?.trim()
-            : 'budget';
-
-          return (
-            <div key={stop.id || index} style={styles.stopCard}>
-              <div style={styles.stopHeader}>
-                <div style={styles.timeBox}>
-                  <span style={styles.icon}>{icon}</span>
-                  <span style={styles.time}>{stop.suggested_time?.slice(0, 5)}</span>
-                </div>
-                <div style={styles.stopInfo}>
-                  <p style={styles.stopType}>
-                    {stop.stop_type?.charAt(0).toUpperCase() + stop.stop_type?.slice(1)}
-                  </p>
-                  <p style={styles.stopLocation}>{location}</p>
-                </div>
-                <span style={{
-                  ...styles.badge,
-                  backgroundColor: CATEGORY_COLORS[category] || '#334155'
-                }}>
-                  {category}
-                </span>
-              </div>
-
-              {description && (
-                <p style={styles.description}>{description}</p>
-              )}
+        {days.map(day => (
+          <div key={day}>
+            <div style={styles.dayHeader}>
+              <span style={styles.dayTitle}>📅 Day {day}</span>
             </div>
-          );
-        })}
+            {stops
+              .filter(s => (s.day_number || 1) === day)
+              .map((stop, index) => {
+                const icon = STOP_ICONS[stop.stop_type?.toLowerCase()] || '📍';
+                const notes = stop.notes?.split('|') || [];
+                const location = notes[0]?.trim();
+                const description = notes[1]?.trim();
+                const category = stop.notes?.includes('Category:')
+                  ? stop.notes.split('Category:')[1]?.trim()
+                  : 'budget';
+
+                return (
+                  <div key={stop.id || index} style={styles.stopCard}>
+                    <div style={styles.stopHeader}>
+                      <div style={styles.timeBox}>
+                        <span style={styles.icon}>{icon}</span>
+                        <span style={styles.time}>{stop.suggested_time?.slice(0, 5)}</span>
+                      </div>
+                      <div style={styles.stopInfo}>
+                        <p style={styles.stopType}>
+                          {stop.stop_type?.charAt(0).toUpperCase() + stop.stop_type?.slice(1)}
+                        </p>
+                        <p style={styles.stopLocation}>{location}</p>
+                      </div>
+                      <span style={{
+                        ...styles.badge,
+                        backgroundColor: CATEGORY_COLORS[category] || '#334155'
+                      }}>
+                        {category}
+                      </span>
+                    </div>
+                    {description && (
+                      <p style={styles.description}>{description}</p>
+                    )}
+                  </div>
+                );
+              })}
+          </div>
+        ))}
 
       </div>
     </div>
@@ -159,6 +169,11 @@ const styles = {
     padding: '12px 24px', borderRadius: 10,
     fontSize: 15, fontWeight: 'bold'
   },
+  dayHeader: {
+    backgroundColor: '#1e3a5f', borderRadius: 8,
+    padding: '10px 14px', marginBottom: 8, marginTop: 16
+  },
+  dayTitle: { color: '#f97316', fontSize: 15, fontWeight: 'bold' },
   stopCard: {
     backgroundColor: '#1e293b', borderRadius: 12,
     padding: 14, marginBottom: 12,

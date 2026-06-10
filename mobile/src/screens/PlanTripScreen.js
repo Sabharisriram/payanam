@@ -7,6 +7,12 @@ import { createTrip, generatePlan } from '../api/trips';
 
 const TRIP_TYPES = ['solo', 'family', 'friends', 'boys', 'bachelor'];
 const VEHICLES = ['car', 'bike', 'bus', 'auto'];
+const PLANNING_MODES = ['essential', 'sightseeing', 'customized'];
+const MODE_DESCRIPTIONS = {
+  essential: 'Tea, breakfast, lunch, snack & dinner only — no sightseeing',
+  sightseeing: 'Meals + 2 real sightseeing spots along the route',
+  customized: 'Enter your own places — meals planned around them',
+};
 
 export default function PlanTripScreen({ navigation }) {
   const [tripName, setTripName] = useState('');
@@ -17,6 +23,9 @@ export default function PlanTripScreen({ navigation }) {
   const [tripType, setTripType] = useState('family');
   const [vehicle, setVehicle] = useState('car');
   const [members, setMembers] = useState('1');
+  const [tripDays, setTripDays] = useState('1');
+  const [planningMode, setPlanningMode] = useState('sightseeing');
+  const [customPlaces, setCustomPlaces] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handlePlanTrip = async () => {
@@ -27,7 +36,6 @@ export default function PlanTripScreen({ navigation }) {
 
     setLoading(true);
     try {
-      // Create trip
       const trip = await createTrip({
         trip_name: tripName,
         start_location: startLocation,
@@ -36,12 +44,13 @@ export default function PlanTripScreen({ navigation }) {
         start_time: startTime,
         trip_type: tripType,
         vehicle_type: vehicle,
-        member_count: parseInt(members)
+        member_count: parseInt(members),
+        trip_days: parseInt(tripDays),
+        planning_mode: planningMode,
+        custom_places: planningMode === 'customized' ? customPlaces : null,
       });
 
-      // Generate plan with Gemini
       const plan = await generatePlan(trip.id);
-
       navigation.navigate('TripPlan', { tripId: trip.id, plan });
 
     } catch (err) {
@@ -125,7 +134,7 @@ export default function PlanTripScreen({ navigation }) {
           onChangeText={setStartTime}
         />
 
-        <Text style={styles.label}>Members</Text>
+        <Text style={styles.label}>Number of Members</Text>
         <TextInput
           style={styles.input}
           placeholder="Number of members"
@@ -133,6 +142,16 @@ export default function PlanTripScreen({ navigation }) {
           keyboardType="number-pad"
           value={members}
           onChangeText={setMembers}
+        />
+
+        <Text style={styles.label}>Number of Days</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="How many days? e.g. 2"
+          placeholderTextColor="#888"
+          keyboardType="number-pad"
+          value={tripDays}
+          onChangeText={setTripDays}
         />
 
         <Selector
@@ -149,17 +168,40 @@ export default function PlanTripScreen({ navigation }) {
           onChange={setVehicle}
         />
 
+        <Selector
+          label="Planning Mode"
+          options={PLANNING_MODES}
+          value={planningMode}
+          onChange={setPlanningMode}
+        />
+        <Text style={styles.modeDesc}>{MODE_DESCRIPTIONS[planningMode]}</Text>
+
+        {planningMode === 'customized' && (
+          <>
+            <Text style={styles.label}>Your Places (one per line)</Text>
+            <TextInput
+              style={[styles.input, styles.multilineInput]}
+              placeholder={'e.g. Pykara Lake, Ooty\nEmerald Dam\nDoddabetta Peak'}
+              placeholderTextColor="#888"
+              multiline
+              numberOfLines={4}
+              value={customPlaces}
+              onChangeText={setCustomPlaces}
+            />
+          </>
+        )}
+
         <TouchableOpacity
           style={styles.button}
           onPress={handlePlanTrip}
           disabled={loading}
         >
           {loading ? (
-            <View style={styles.loadingContainer}>
-                <ActivityIndicator color="#fff" size="large" />
-                <Text style={styles.loadingText}>✨ Generating your plan...</Text>
-                <Text style={styles.loadingSubText}>Finding best stops along the route</Text>
-                <Text style={styles.loadingSubText}>This takes about 20 seconds</Text>
+            <View style={{ alignItems: 'center' }}>
+              <ActivityIndicator color="#fff" size="large" />
+              <Text style={styles.loadingText}>✨ Generating your plan...</Text>
+              <Text style={styles.loadingSubText}>Finding best stops along the route</Text>
+              <Text style={styles.loadingSubText}>This takes about 20 seconds</Text>
             </View>
           ) : (
             <Text style={styles.buttonText}>Generate Trip Plan ✨</Text>
@@ -194,7 +236,8 @@ const styles = StyleSheet.create({
     padding: 18, alignItems: 'center', marginTop: 20
   },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  loadingContainer: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  loadingText: { color: '#fff', fontSize: 15 },
-  loadingSubText: { color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 4 }
+  loadingText: { color: '#fff', fontSize: 15, marginTop: 10 },
+  loadingSubText: { color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 4 },
+  modeDesc: { color: '#64748b', fontSize: 12, marginBottom: 14, marginTop: -6, paddingLeft: 2 },
+  multilineInput: { height: 100, textAlignVertical: 'top' },
 });

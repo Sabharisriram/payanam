@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
   ActivityIndicator, SafeAreaView, TouchableOpacity
 } from 'react-native';
-import { generatePlan, getTrip, getTripStops } from '../api/trips';
+import { WebView } from 'react-native-webview';
+import { getTrip, getTripStops, voiceCommand } from '../api/trips';
 
 const STOP_ICONS = {
   tea: '☕',
@@ -15,8 +16,10 @@ const STOP_ICONS = {
   fuel: '⛽',
   accommodation: '🏨',
   stay: '🏨',
+  'stay/accommodation': '🏨',
   activity: '🎯',
   meal: '🍽️',
+  snack: '🥤',
 };
 
 const CATEGORY_COLORS = {
@@ -27,15 +30,76 @@ const CATEGORY_COLORS = {
   free: '#1e293b',
 };
 
+const VOICE_STYLE = {
+  idle:       { bg: '#4f1d96', border: '#7c3aed' },
+  listening:  { bg: '#7f1d1d', border: '#ef4444' },
+  processing: { bg: '#1e293b', border: '#475569' },
+  done:       { bg: '#14532d', border: '#22c55e' },
+  error:      { bg: '#7f1d1d', border: '#ef4444' },
+};
+
+// Inline HTML that runs webkitSpeechRecognition and posts messages back to RN
+const SPEECH_HTML = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"></head>
+<body>
+<script>
+(function() {
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    window.ReactNativeWebView.postMessage(JSON.stringify({type:'unsupported'}));
+    return;
+  }
+  var rec = new SR();
+  rec.lang = 'en-IN';
+  rec.continuous = false;
+  rec.interimResults = true;
+  rec.maxAlternatives = 1;
+
+  rec.onresult = function(e) {
+    var partial = '', final = '';
+    for (var i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) { final += e.results[i][0].transcript; }
+      else { partial += e.results[i][0].transcript; }
+    }
+    if (final) {
+      window.ReactNativeWebView.postMessage(JSON.stringify({type:'result',text:final.trim()}));
+    } else if (partial) {
+      window.ReactNativeWebView.postMessage(JSON.stringify({type:'partial',text:partial.trim()}));
+    }
+  };
+
+  rec.onerror = function(e) {
+    window.ReactNativeWebView.postMessage(JSON.stringify({type:'error',error:e.error}));
+  };
+
+  rec.onend = function() {
+    window.ReactNativeWebView.postMessage(JSON.stringify({type:'end'}));
+  };
+
+  window.startRecognition = function() { try { rec.start(); } catch(e) {} };
+  window.stopRecognition  = function() { try { rec.stop();  } catch(e) {} };
+
+  window.ReactNativeWebView.postMessage(JSON.stringify({type:'ready'}));
+})();
+<\/script>
+</body></html>`;
+
 export default function TripPlanScreen({ route, navigation }) {
   const { tripId, plan: initialPlan } = route.params;
   const [plan, setPlan] = useState(initialPlan || null);
   const [trip, setTrip] = useState(null);
   const [loading, setLoading] = useState(!initialPlan);
 
+  const [voiceState, setVoiceState] = useState('idle');
+  const [voiceResult, setVoiceResult] = useState('');
+  const [partialText, setPartialText] = useState('');
+  const speechRef = useRef(null);
+  const voiceResetTimer = useRef(null);
+
   useEffect(() => {
     if (!initialPlan) loadPlan();
     loadTrip();
+    return () => { if (voiceResetTimer.current) clearTimeout(voiceResetTimer.current); };
   }, []);
 
   const loadPlan = async () => {
@@ -50,13 +114,111 @@ export default function TripPlanScreen({ route, navigation }) {
   };
 
   const loadTrip = async () => {
-    try {
-      const data = await getTrip(tripId);
-      setTrip(data);
-    } catch (err) {
-      console.error(err);
+    try { setTrip(await getTrip(tripId)); }
+    catch (err) { console.error(err); }
+  };
+
+  // ── Voice ────────────────────────────────────────────────────────────────────
+
+  const startListening = () => {
+    if (voiceState === 'processing' || voiceState === 'listening') return;
+    setPartialText('');
+    setVoiceResult('');
+    setVoiceState('listening');
+    speechRef.current?.injectJavaScript('window.startRecognition(); true;');
+  };
+
+  const stopListening = () => {
+    if (voiceState !== 'listening') return;
+    speechRef.current?.injectJavaScript('window.stopRecognition(); true;');
+  };
+
+  const handleSpeechMessage = async (event) => {
+    let data;
+    try { data = JSON.parse(event.nativeEvent.data); }
+    catch (_) { return; }
+
+    if (data.type === 'partial') {
+      setPartialText(data.text);
+      return;
+    }
+
+    if (data.type === 'result') {
+      setPartialText('');
+      setVoiceState('processing');
+      try {
+        const result = await voiceCommand(tripId, data.text);
+        if (result.success && result.updated_stop) {
+          setVoiceResult(`✓  ${result.understood_command}`);
+          setVoiceState('done');
+          setPlan(prev => {
+            const newStops = (prev?.stops || []).map(s =>
+              s.id === result.updated_stop.id ? { ...s, ...result.updated_stop } : s
+            );
+            return { ...(prev || {}), stops: newStops };
+          });
+        } else if (result.success) {
+          setVoiceResult(`✓  ${result.understood_command}`);
+          setVoiceState('done');
+        } else {
+          setVoiceResult(`?  ${result.understood_command || 'Could not understand'}`);
+          setVoiceState('error');
+        }
+      } catch (err) {
+        console.error('Voice command error:', err.message);
+        setVoiceResult('⚠  Server error. Try again.');
+        setVoiceState('error');
+      } finally {
+        scheduleVoiceReset();
+      }
+      return;
+    }
+
+    if (data.type === 'end') {
+      setPartialText('');
+      // Only fire "nothing heard" if we never got a result (still in listening state)
+      setVoiceState(prev => {
+        if (prev === 'listening') {
+          setVoiceResult('⚠  Nothing heard. Try again.');
+          scheduleVoiceReset();
+          return 'error';
+        }
+        return prev;
+      });
+      return;
+    }
+
+    if (data.type === 'error') {
+      setPartialText('');
+      setVoiceResult(`⚠  ${data.error === 'not-allowed' ? 'Mic permission denied' : 'Voice error. Try again.'}`);
+      setVoiceState('error');
+      scheduleVoiceReset();
+      return;
+    }
+
+    if (data.type === 'unsupported') {
+      setVoiceResult('⚠  Voice not supported on this device');
+      setVoiceState('error');
+      scheduleVoiceReset();
     }
   };
+
+  const scheduleVoiceReset = () => {
+    if (voiceResetTimer.current) clearTimeout(voiceResetTimer.current);
+    voiceResetTimer.current = setTimeout(() => {
+      setVoiceState('idle');
+      setVoiceResult('');
+      setPartialText('');
+    }, 4000);
+  };
+
+  const getVoiceLabel = () => {
+    if (voiceState === 'listening') return partialText || '🔴  Listening...';
+    if (voiceState === 'done' || voiceState === 'error') return voiceResult;
+    return '🎤  Hold to Speak';
+  };
+
+  // ── Stop card ────────────────────────────────────────────────────────────────
 
   const renderStop = (stop, index) => {
     const icon = STOP_ICONS[stop.stop_type] || '📍';
@@ -106,6 +268,8 @@ export default function TripPlanScreen({ route, navigation }) {
     );
   };
 
+  // ── Loading ──────────────────────────────────────────────────────────────────
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -119,9 +283,24 @@ export default function TripPlanScreen({ route, navigation }) {
   }
 
   const stops = plan?.stops || [];
+  const vs = VOICE_STYLE[voiceState];
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Hidden WebView — Web Speech API bridge */}
+      <WebView
+        ref={speechRef}
+        source={{ html: SPEECH_HTML }}
+        style={styles.hiddenWebView}
+        javaScriptEnabled={true}
+        originWhitelist={['*']}
+        onMessage={handleSpeechMessage}
+        onPermissionRequest={({ nativeEvent }) => {
+          if (nativeEvent.grant) nativeEvent.grant(nativeEvent.resources);
+        }}
+        mediaPlaybackRequiresUserGesture={false}
+      />
+
       <ScrollView contentContainerStyle={styles.inner}>
 
         <TouchableOpacity onPress={() => navigation.goBack()}>
@@ -140,21 +319,76 @@ export default function TripPlanScreen({ route, navigation }) {
           </View>
         )}
 
+        {/* Action buttons */}
+        <View style={styles.actionRow}>
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.liveBtn]}
+            onPress={() => navigation.navigate('LiveTrip', {
+              tripId: tripId,
+              tripName: trip?.trip_name || 'Trip'
+            })}
+          >
+            <Text style={styles.actionBtnText}>▶ Live Trip</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.mapBtn]}
+            onPress={() => navigation.navigate('MapScreen', {
+              stops: stops.map(s => ({
+                ...s,
+                stop_lat: s.stop_lat ?? s.coords?.lat ?? null,
+                stop_lng: s.stop_lng ?? s.coords?.lng ?? null,
+              })),
+              tripName: trip?.trip_name || 'Trip',
+            })}
+          >
+            <Text style={styles.actionBtnText}>🗺️ View Map</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Voice command button */}
         <TouchableOpacity
-          style={styles.liveButton}
-          onPress={() => navigation.navigate('LiveTrip', {
-            tripId: tripId,
-            tripName: trip?.trip_name || 'Trip'
-          })}
+          style={[
+            styles.voiceBtn,
+            { backgroundColor: vs.bg, borderColor: vs.border },
+            voiceState === 'processing' && styles.voiceBtnDisabled,
+          ]}
+          onPressIn={startListening}
+          onPressOut={stopListening}
+          disabled={voiceState === 'processing'}
+          activeOpacity={0.8}
         >
-          <Text style={styles.liveButtonText}>▶ Start Live Trip</Text>
+          {voiceState === 'processing' ? (
+            <View style={styles.voiceRow}>
+              <ActivityIndicator color="#94a3b8" size="small" />
+              <Text style={[styles.voiceBtnText, { color: '#94a3b8', marginLeft: 8 }]}>
+                Processing...
+              </Text>
+            </View>
+          ) : (
+            <Text style={styles.voiceBtnText} numberOfLines={2}>{getVoiceLabel()}</Text>
+          )}
         </TouchableOpacity>
+
+        <Text style={styles.voiceHint}>
+          Say: "Change tea time to 8am" · "Change the lunch stop" · "Move dinner to 9pm"
+        </Text>
 
         <Text style={styles.sectionTitle}>
           Your Trip Plan ({stops.length} stops)
         </Text>
 
-        {stops.map((stop, index) => renderStop(stop, index))}
+        {Array.from(new Set(stops.map(s => s.day_number || 1))).sort().map(day => (
+          <View key={day}>
+            <View style={styles.dayHeader}>
+              <Text style={styles.dayTitle}>📅 Day {day}</Text>
+            </View>
+            {stops
+              .filter(s => (s.day_number || 1) === day)
+              .map((stop, index) => renderStop(stop, index))
+            }
+          </View>
+        ))}
 
       </ScrollView>
     </SafeAreaView>
@@ -163,6 +397,7 @@ export default function TripPlanScreen({ route, navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0f172a' },
+  hiddenWebView: { height: 1, width: 1, position: 'absolute', opacity: 0 },
   inner: { padding: 20, paddingBottom: 40 },
   back: { color: '#f97316', fontSize: 16, marginBottom: 16 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
@@ -187,9 +422,7 @@ const styles = StyleSheet.create({
   stopInfo: { flex: 1 },
   stopType: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
   stopLocation: { color: '#94a3b8', fontSize: 12, marginTop: 2 },
-  categoryBadge: {
-    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10
-  },
+  categoryBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
   categoryText: { color: '#fff', fontSize: 10 },
   stopDescription: { color: '#cbd5e1', fontSize: 13, lineHeight: 18, marginBottom: 8 },
   nearbyContainer: { borderTopWidth: 1, borderTopColor: '#334155', paddingTop: 10 },
@@ -200,9 +433,25 @@ const styles = StyleSheet.create({
   },
   placeName: { color: '#fff', fontSize: 13, flex: 1 },
   placeScore: { color: '#f97316', fontSize: 12 },
-  liveButton: {
-    backgroundColor: '#16a34a', borderRadius: 12,
-    padding: 14, alignItems: 'center', marginBottom: 16
+  actionRow: { flexDirection: 'row', gap: 10, marginBottom: 10 },
+  actionBtn: { flex: 1, borderRadius: 12, padding: 14, alignItems: 'center' },
+  liveBtn: { backgroundColor: '#16a34a' },
+  mapBtn: { backgroundColor: '#1e3a5f', borderWidth: 1, borderColor: '#f97316' },
+  actionBtnText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
+  voiceBtn: {
+    borderRadius: 12, padding: 14, alignItems: 'center',
+    borderWidth: 1.5, marginBottom: 6, minHeight: 48,
   },
-  liveButtonText: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
+  voiceBtnDisabled: { opacity: 0.6 },
+  voiceRow: { flexDirection: 'row', alignItems: 'center' },
+  voiceBtnText: { color: '#fff', fontSize: 14, fontWeight: 'bold', textAlign: 'center' },
+  voiceHint: {
+    color: '#475569', fontSize: 11, textAlign: 'center',
+    marginBottom: 20, lineHeight: 16,
+  },
+  dayHeader: {
+    backgroundColor: '#1e3a5f', borderRadius: 8,
+    padding: 10, marginBottom: 8, marginTop: 8
+  },
+  dayTitle: { color: '#f97316', fontSize: 15, fontWeight: 'bold' },
 });
