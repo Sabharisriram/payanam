@@ -3,6 +3,7 @@ import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, ScrollView, ActivityIndicator, Alert, SafeAreaView
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { createTrip, generatePlan } from '../api/trips';
 
 const TRIP_TYPES = ['solo', 'family', 'friends', 'boys', 'bachelor'];
@@ -14,12 +15,36 @@ const MODE_DESCRIPTIONS = {
   customized: 'Enter your own places — meals planned around them',
 };
 
+const makeDefaultTime = () => {
+  const d = new Date();
+  d.setHours(6, 0, 0, 0);
+  return d;
+};
+
+const formatDateDisplay = (d) =>
+  d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+
+const formatDateAPI = (d) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+const formatTimeDisplay = (d) =>
+  d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+
+const formatTimeAPI = (d) =>
+  `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+
 export default function PlanTripScreen({ navigation }) {
   const [tripName, setTripName] = useState('');
   const [startLocation, setStartLocation] = useState('');
   const [endLocation, setEndLocation] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [startTime, setStartTime] = useState('06:00');
+  const [startDateObj, setStartDateObj] = useState(new Date());
+  const [startTimeObj, setStartTimeObj] = useState(makeDefaultTime);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
   const [tripType, setTripType] = useState('family');
   const [vehicle, setVehicle] = useState('car');
   const [members, setMembers] = useState('1');
@@ -28,8 +53,18 @@ export default function PlanTripScreen({ navigation }) {
   const [customPlaces, setCustomPlaces] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const onDateChange = (event, selected) => {
+    setShowDatePicker(false);
+    if (event.type !== 'dismissed' && selected) setStartDateObj(selected);
+  };
+
+  const onTimeChange = (event, selected) => {
+    setShowTimePicker(false);
+    if (event.type !== 'dismissed' && selected) setStartTimeObj(selected);
+  };
+
   const handlePlanTrip = async () => {
-    if (!tripName || !startLocation || !endLocation || !startDate) {
+    if (!tripName || !startLocation || !endLocation) {
       Alert.alert('Error', 'Please fill all required fields');
       return;
     }
@@ -40,8 +75,8 @@ export default function PlanTripScreen({ navigation }) {
         trip_name: tripName,
         start_location: startLocation,
         end_location: endLocation,
-        start_date: startDate,
-        start_time: startTime,
+        start_date: formatDateAPI(startDateObj),
+        start_time: formatTimeAPI(startTimeObj),
         trip_type: tripType,
         vehicle_type: vehicle,
         member_count: parseInt(members),
@@ -116,23 +151,34 @@ export default function PlanTripScreen({ navigation }) {
           onChangeText={setEndLocation}
         />
 
-        <Text style={styles.label}>Date (YYYY-MM-DD)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="e.g. 2026-06-15"
-          placeholderTextColor="#888"
-          value={startDate}
-          onChangeText={setStartDate}
-        />
+        <Text style={styles.label}>Date</Text>
+        <TouchableOpacity style={styles.pickerBtn} onPress={() => setShowDatePicker(true)}>
+          <Text style={styles.pickerBtnText}>📅  {formatDateDisplay(startDateObj)}</Text>
+        </TouchableOpacity>
 
-        <Text style={styles.label}>Start Time (HH:MM)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="e.g. 06:00"
-          placeholderTextColor="#888"
-          value={startTime}
-          onChangeText={setStartTime}
-        />
+        <Text style={styles.label}>Start Time</Text>
+        <TouchableOpacity style={styles.pickerBtn} onPress={() => setShowTimePicker(true)}>
+          <Text style={styles.pickerBtnText}>🕐  {formatTimeDisplay(startTimeObj)}</Text>
+        </TouchableOpacity>
+
+        {showDatePicker && (
+          <DateTimePicker
+            value={startDateObj}
+            mode="date"
+            display="default"
+            onChange={onDateChange}
+          />
+        )}
+
+        {showTimePicker && (
+          <DateTimePicker
+            value={startTimeObj}
+            mode="time"
+            display="default"
+            is24Hour={true}
+            onChange={onTimeChange}
+          />
+        )}
 
         <Text style={styles.label}>Number of Members</Text>
         <TextInput
@@ -154,26 +200,9 @@ export default function PlanTripScreen({ navigation }) {
           onChangeText={setTripDays}
         />
 
-        <Selector
-          label="Trip Type"
-          options={TRIP_TYPES}
-          value={tripType}
-          onChange={setTripType}
-        />
-
-        <Selector
-          label="Vehicle"
-          options={VEHICLES}
-          value={vehicle}
-          onChange={setVehicle}
-        />
-
-        <Selector
-          label="Planning Mode"
-          options={PLANNING_MODES}
-          value={planningMode}
-          onChange={setPlanningMode}
-        />
+        <Selector label="Trip Type" options={TRIP_TYPES} value={tripType} onChange={setTripType} />
+        <Selector label="Vehicle" options={VEHICLES} value={vehicle} onChange={setVehicle} />
+        <Selector label="Planning Mode" options={PLANNING_MODES} value={planningMode} onChange={setPlanningMode} />
         <Text style={styles.modeDesc}>{MODE_DESCRIPTIONS[planningMode]}</Text>
 
         {planningMode === 'customized' && (
@@ -221,19 +250,24 @@ const styles = StyleSheet.create({
   label: { color: '#94a3b8', fontSize: 13, marginBottom: 6, marginTop: 4 },
   input: {
     backgroundColor: '#1e293b', color: '#fff', borderRadius: 10,
-    padding: 14, marginBottom: 14, fontSize: 15, borderWidth: 1, borderColor: '#334155'
+    padding: 14, marginBottom: 14, fontSize: 15, borderWidth: 1, borderColor: '#334155',
   },
+  pickerBtn: {
+    backgroundColor: '#1e293b', borderRadius: 10, padding: 14,
+    marginBottom: 14, borderWidth: 1, borderColor: '#334155',
+  },
+  pickerBtnText: { color: '#fff', fontSize: 15 },
   selectorContainer: { marginBottom: 16 },
   chip: {
     backgroundColor: '#1e293b', borderRadius: 20, paddingHorizontal: 16,
-    paddingVertical: 8, marginRight: 8, borderWidth: 1, borderColor: '#334155'
+    paddingVertical: 8, marginRight: 8, borderWidth: 1, borderColor: '#334155',
   },
   chipSelected: { backgroundColor: '#f97316', borderColor: '#f97316' },
   chipText: { color: '#94a3b8', fontSize: 14 },
   chipTextSelected: { color: '#fff', fontWeight: 'bold' },
   button: {
     backgroundColor: '#f97316', borderRadius: 12,
-    padding: 18, alignItems: 'center', marginTop: 20
+    padding: 18, alignItems: 'center', marginTop: 20,
   },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
   loadingText: { color: '#fff', fontSize: 15, marginTop: 10 },
