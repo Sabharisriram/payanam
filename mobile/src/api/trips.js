@@ -47,3 +47,13 @@ export const voiceCommand = async (tripId, commandText, locationCtx = {}) => {
   );
   return response.data;
 };
+
+export const quickReview = async (tripId, stopId, rating) => {
+  const response = await client.post(`/trips/${tripId}/stops/${stopId}/quick-review`, { rating });
+  return response.data;
+};
+
+export const markProximityVisited = async (tripId, stopId) => {
+  const response = await client.patch(`/trips/${tripId}/stops/${stopId}/proximity-visited`);
+  return response.data;
+};

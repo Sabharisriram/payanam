@@ -262,6 +262,60 @@ router.post('/:tripId/stops/:stopId/review', authGuard, async (req, res) => {
   }
 });
 
+
+// QUICK REVIEW — in-trip proximity review (only overall rating, marks stop as visited)
+router.post('/:id/stops/:stopId/quick-review', authGuard, async (req, res) => {
+  try {
+    const { rating } = req.body;
+    const { id: tripId, stopId } = req.params;
+
+    if (!rating || rating < 1 || rating > 5) {
+      return res.status(400).json({ error: 'rating 1-5 required' });
+    }
+
+    const stopResult = await pool.query(
+      'SELECT * FROM trip_stops WHERE id = $1 AND trip_id = $2',
+      [stopId, tripId]
+    );
+    if (stopResult.rows.length === 0) return res.status(404).json({ error: 'Stop not found' });
+
+    const tripResult = await pool.query('SELECT trip_type FROM trips WHERE id = $1', [tripId]);
+    const trip_type = tripResult.rows[0]?.trip_type;
+    const place_id = stopResult.rows[0]?.place_id || null;
+
+    await pool.query(
+      `INSERT INTO reviews (user_id, trip_id, place_id, rating, cleanliness_rating, food_quality, comment, trip_type)
+       VALUES ($1, $2, $3, $4, 3, 3, '', $5)`,
+      [req.userId, tripId, place_id, rating, trip_type]
+    );
+
+    await pool.query(
+      `UPDATE trip_stops SET proximity_review_done = TRUE, visited_at = NOW() WHERE id = $1`,
+      [stopId]
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Quick review error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// PROXIMITY VISITED — mark stop as seen (user skipped the quick review)
+router.patch('/:id/stops/:stopId/proximity-visited', authGuard, async (req, res) => {
+  try {
+    const { id: tripId, stopId } = req.params;
+    await pool.query(
+      `UPDATE trip_stops SET proximity_review_done = TRUE, visited_at = NOW()
+       WHERE id = $1 AND trip_id = $2`,
+      [stopId, tripId]
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Proximity visited error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
 // VOICE COMMAND — modify a stop by voice
 router.post('/:id/voice-command', authGuard, async (req, res) => {
   const { command, current_lat, current_lng, current_time, avg_speed_kmh } = req.body;

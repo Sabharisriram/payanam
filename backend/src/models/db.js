@@ -23,6 +23,8 @@ async function runMigrations() {
     `ALTER TABLE trips ADD COLUMN IF NOT EXISTS custom_places TEXT`,
     `ALTER TABLE trip_stops ADD COLUMN IF NOT EXISTS stop_lat FLOAT`,
     `ALTER TABLE trip_stops ADD COLUMN IF NOT EXISTS stop_lng FLOAT`,
+    `ALTER TABLE trip_stops ADD COLUMN IF NOT EXISTS visited_at TIMESTAMP`,
+    `ALTER TABLE trip_stops ADD COLUMN IF NOT EXISTS proximity_review_done BOOLEAN DEFAULT FALSE`,
   ];
   for (const sql of migrations) {
     try {

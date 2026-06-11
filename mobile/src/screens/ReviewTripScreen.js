@@ -21,7 +21,7 @@ const StarRating = ({ value, onChange, label }) => {
 };
 
 export default function ReviewTripScreen({ route, navigation }) {
-  const { tripId, tripName } = route.params;
+  const { tripId, tripName, prefilledRatings = {} } = route.params;
   const [stops, setStops] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [reviews, setReviews] = useState({});
@@ -34,7 +34,19 @@ export default function ReviewTripScreen({ route, navigation }) {
   const loadStops = async () => {
     try {
       const data = await getTripStops(tripId);
-      setStops(data);
+      // Only show stops not already reviewed via proximity
+      const pending = data.filter(s => !s.proximity_review_done);
+      setStops(pending);
+      // Pre-fill any ratings captured during the live trip
+      const initial = {};
+      for (const stop of pending) {
+        if (prefilledRatings[stop.id]) {
+          initial[stop.id] = { rating: prefilledRatings[stop.id] };
+        }
+      }
+      if (Object.keys(initial).length > 0) {
+        setReviews(initial);
+      }
     } catch (err) {
       console.error(err);
     }
@@ -99,7 +111,21 @@ export default function ReviewTripScreen({ route, navigation }) {
   if (stops.length === 0) {
     return (
       <SafeAreaView style={styles.container}>
-        <Text style={styles.loading}>Loading stops...</Text>
+        <View style={styles.inner}>
+          <Text style={styles.title}>Rate Your Stops</Text>
+          <Text style={styles.tripName}>{tripName}</Text>
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyIcon}>✅</Text>
+            <Text style={styles.emptyText}>All stops were reviewed during the trip!</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.nextButton}
+            onPress={handleFinish}
+            disabled={submitting}
+          >
+            <Text style={styles.nextButtonText}>✅ Finish Trip</Text>
+          </TouchableOpacity>
+        </View>
       </SafeAreaView>
     );
   }
@@ -116,14 +142,12 @@ export default function ReviewTripScreen({ route, navigation }) {
         <Text style={styles.tripName}>{tripName}</Text>
         <Text style={styles.progress}>{progress}</Text>
 
-        {/* Progress bar */}
         <View style={styles.progressBar}>
           <View style={[styles.progressFill, {
             width: `${((currentIndex + 1) / stops.length) * 100}%`
           }]} />
         </View>
 
-        {/* Stop card */}
         <View style={styles.stopCard}>
           <Text style={styles.stopType}>
             {stop.stop_type?.charAt(0).toUpperCase() + stop.stop_type?.slice(1)}
@@ -134,7 +158,6 @@ export default function ReviewTripScreen({ route, navigation }) {
           </Text>
         </View>
 
-        {/* Rating */}
         <View style={styles.reviewCard}>
           <StarRating
             label="Overall Rating"
@@ -163,7 +186,6 @@ export default function ReviewTripScreen({ route, navigation }) {
           />
         </View>
 
-        {/* Buttons */}
         <TouchableOpacity
           style={styles.nextButton}
           onPress={handleNext}
@@ -197,6 +219,12 @@ const styles = StyleSheet.create({
   progressFill: {
     height: 4, backgroundColor: '#f97316', borderRadius: 2
   },
+  emptyCard: {
+    backgroundColor: '#1e293b', borderRadius: 12,
+    padding: 32, alignItems: 'center', marginTop: 32, marginBottom: 24
+  },
+  emptyIcon: { fontSize: 48, marginBottom: 12 },
+  emptyText: { color: '#94a3b8', fontSize: 15, textAlign: 'center' },
   stopCard: {
     backgroundColor: '#1e293b', borderRadius: 12,
     padding: 16, marginBottom: 16,
