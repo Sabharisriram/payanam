@@ -66,7 +66,7 @@ D:\payanam
    - TripPlanScreen: "▶ Live Trip" + "🗺️ View Map" side-by-side buttons; normalises stop_lat from coords for fresh plans
    - AppNavigator: MapScreen added to stack
    - Package: react-native-webview installed (expo install, SDK 54 compatible)
-### Priority 3 🔄 IN PROGRESS — pending final end-to-end test
+### Priority 3 ✅ COMPLETE
 4. Voice interaction
    - Approach: hidden WebView (react-native-webview, already installed) runs webkitSpeechRecognition
    - Works in Expo Go — no native build required
@@ -86,7 +86,7 @@ D:\payanam
    - Mobile merges updated_stop back into plan state (no full reload)
    - Voice button: purple idle → red listening (shows partial text) → spinner processing → green done / red error
    - Auto-resets to idle after 4 seconds
-   - ⚠  Pending: final end-to-end test with physical Android device
+   - TTS feedback via expo-speech (en-IN): "Listening" on start; natural success message on done; "Sorry, I couldn't understand. Please try again." on all error paths
 ## Tech Needed for New Features
 - react-native-maps (OSM tiles - free)
 - Deep link to Google Maps app

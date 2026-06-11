@@ -264,10 +264,23 @@ router.post('/:tripId/stops/:stopId/review', authGuard, async (req, res) => {
 
 // VOICE COMMAND — modify a stop by voice
 router.post('/:id/voice-command', authGuard, async (req, res) => {
+  const { command, current_lat, current_lng, current_time, avg_speed_kmh } = req.body;
+  console.log(`[voice] ▶ tripId=${req.params.id} command="${command}" loc=${current_lat ? `${current_lat},${current_lng} @${current_time}` : 'none'}`);
+
   try {
-    const { command } = req.body;
     if (!command) return res.status(400).json({ error: 'command text required' });
 
+    // Build location context if GPS was sent from mobile
+    const locationCtx = (current_lat && current_lng && current_time)
+      ? {
+          current_lat: parseFloat(current_lat),
+          current_lng: parseFloat(current_lng),
+          current_time,
+          avg_speed_kmh: parseFloat(avg_speed_kmh) || 60,
+        }
+      : null;
+
+    console.log('[voice] step=fetch-trip');
     const tripResult = await pool.query(
       'SELECT * FROM trips WHERE id = $1 AND user_id = $2',
       [req.params.id, req.userId]
@@ -275,12 +288,15 @@ router.post('/:id/voice-command', authGuard, async (req, res) => {
     if (tripResult.rows.length === 0) return res.status(404).json({ error: 'Trip not found' });
 
     const trip = tripResult.rows[0];
+    console.log(`[voice] step=fetch-stops trip="${trip.trip_name}"`);
     const stopsResult = await pool.query(
       'SELECT * FROM trip_stops WHERE trip_id = $1 ORDER BY sequence_order ASC',
       [trip.id]
     );
+    console.log(`[voice] step=interpret stops=${stopsResult.rows.length}`);
 
-    const action = await interpretVoiceCommand(command, trip, stopsResult.rows);
+    const action = await interpretVoiceCommand(command, trip, stopsResult.rows, locationCtx);
+    console.log(`[voice] step=action action=${JSON.stringify(action)}`);
 
     if (action.action === 'unknown') {
       return res.json({
@@ -293,35 +309,54 @@ router.post('/:id/voice-command', authGuard, async (req, res) => {
     let updatedStop = null;
 
     if (action.action === 'update_time') {
-      const result = await pool.query(
-        `UPDATE trip_stops SET suggested_time = $1
-         WHERE trip_id = $2 AND sequence_order = $3 RETURNING *`,
-        [action.new_time, trip.id, action.stop_sequence]
-      );
+      let query, params;
+      if (action.location_aware && action.new_place_name) {
+        // Location-aware: update time AND place in a single query
+        const newNotes = `${action.new_place_name} | Near your route at ${action.new_time} | Category: ${action.new_price_category || 'budget'}`;
+        console.log(`[voice] step=db-update-time+place seq=${action.stop_sequence} time=${action.new_time} place="${action.new_place_name}"`);
+        query = `UPDATE trip_stops SET suggested_time = $1, notes = $2, stop_lat = $3, stop_lng = $4
+                 WHERE trip_id = $5 AND sequence_order = $6 RETURNING *`;
+        params = [action.new_time, newNotes, action.new_place_lat, action.new_place_lng, trip.id, action.stop_sequence];
+      } else {
+        console.log(`[voice] step=db-update-time seq=${action.stop_sequence} time=${action.new_time}`);
+        query = `UPDATE trip_stops SET suggested_time = $1
+                 WHERE trip_id = $2 AND sequence_order = $3 RETURNING *`;
+        params = [action.new_time, trip.id, action.stop_sequence];
+      }
+      const result = await pool.query(query, params);
       updatedStop = result.rows[0] || null;
+      console.log(`[voice] step=db-done updatedStop=${updatedStop?.id || 'null'}`);
     }
 
     if (action.action === 'change_place') {
+      console.log(`[voice] step=geocode place="${action.new_place_name}"`);
       let lat = null, lng = null;
       try {
         const coords = await geocodeLocation(action.new_place_name);
         lat = coords?.lat || null;
         lng = coords?.lng || null;
-      } catch (_) {}
+        console.log(`[voice] step=geocode-ok lat=${lat} lng=${lng}`);
+      } catch (geoErr) {
+        console.error('[voice] geocode failed (non-fatal):', geoErr.message);
+      }
 
       const newNotes = `${action.new_place_name} | ${action.new_notes || ''} | Category: ${action.new_price_category || 'budget'}`;
+      console.log(`[voice] step=db-update-place seq=${action.stop_sequence}`);
       const result = await pool.query(
         `UPDATE trip_stops SET notes = $1, stop_lat = $2, stop_lng = $3
          WHERE trip_id = $4 AND sequence_order = $5 RETURNING *`,
         [newNotes, lat, lng, trip.id, action.stop_sequence]
       );
       updatedStop = result.rows[0] || null;
+      console.log(`[voice] step=db-done updatedStop=${updatedStop?.id || 'null'}`);
     }
 
+    console.log(`[voice] ✓ success`);
     res.json({ success: true, understood_command: action.understood_command, action, updated_stop: updatedStop });
 
   } catch (err) {
-    console.error('Voice command error:', err);
+    console.error('[voice] ✗ FAILED:', err.message);
+    console.error('[voice] stack:', err.stack);
     res.status(500).json({ error: 'Failed to process voice command: ' + err.message });
   }
 });

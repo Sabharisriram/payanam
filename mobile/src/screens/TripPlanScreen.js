@@ -4,6 +4,8 @@ import {
   ActivityIndicator, SafeAreaView, TouchableOpacity
 } from 'react-native';
 import { WebView } from 'react-native-webview';
+import * as Speech from 'expo-speech';
+import * as Location from 'expo-location';
 import { getTrip, getTripStops, voiceCommand } from '../api/trips';
 
 const STOP_ICONS = {
@@ -53,7 +55,7 @@ const SPEECH_HTML = `<!DOCTYPE html>
   rec.lang = 'en-IN';
   rec.continuous = false;
   rec.interimResults = true;
-  rec.maxAlternatives = 1;
+  rec.maxAlternatives = 3;
 
   rec.onresult = function(e) {
     var partial = '', final = '';
@@ -69,6 +71,8 @@ const SPEECH_HTML = `<!DOCTYPE html>
   };
 
   rec.onerror = function(e) {
+    // no-speech just means silence — let the 'end' event handle the UI
+    if (e.error === 'no-speech') return;
     window.ReactNativeWebView.postMessage(JSON.stringify({type:'error',error:e.error}));
   };
 
@@ -125,12 +129,24 @@ export default function TripPlanScreen({ route, navigation }) {
     setPartialText('');
     setVoiceResult('');
     setVoiceState('listening');
-    speechRef.current?.injectJavaScript('window.startRecognition(); true;');
+    // Start recognition only after TTS finishes — prevents the mic capturing "Listening"
+    Speech.speak('Listening', {
+      language: 'en-IN',
+      onDone: () => speechRef.current?.injectJavaScript('window.startRecognition(); true;'),
+    });
   };
 
   const stopListening = () => {
     if (voiceState !== 'listening') return;
     speechRef.current?.injectJavaScript('window.stopRecognition(); true;');
+  };
+
+  const handleVoicePress = () => {
+    if (voiceState === 'listening') {
+      stopListening();
+    } else if (voiceState !== 'processing') {
+      startListening();
+    }
   };
 
   const handleSpeechMessage = async (event) => {
@@ -147,7 +163,25 @@ export default function TripPlanScreen({ route, navigation }) {
       setPartialText('');
       setVoiceState('processing');
       try {
-        const result = await voiceCommand(tripId, data.text);
+        // Get GPS location to send with the command for location-aware stop updates
+        let locationCtx = {};
+        try {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status === 'granted') {
+            const loc = await Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.Balanced,
+            });
+            const now = new Date();
+            locationCtx = {
+              current_lat: loc.coords.latitude,
+              current_lng: loc.coords.longitude,
+              current_time: `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`,
+              avg_speed_kmh: 60,
+            };
+          }
+        } catch (_) { /* location unavailable — proceed without it */ }
+
+        const result = await voiceCommand(tripId, data.text, locationCtx);
         if (result.success && result.updated_stop) {
           setVoiceResult(`✓  ${result.understood_command}`);
           setVoiceState('done');
@@ -157,17 +191,34 @@ export default function TripPlanScreen({ route, navigation }) {
             );
             return { ...(prev || {}), stops: newStops };
           });
+          const a = result.action;
+          let ttsMsg;
+          if (a?.action === 'update_time') {
+            if (a.location_aware && a.new_place_name) {
+              ttsMsg = `Done! Changed your ${a.stop_type || 'stop'} to ${a.new_time} at ${a.new_place_name}.`;
+            } else {
+              ttsMsg = `Done! Changed your ${a.stop_type || 'stop'} time to ${a.new_time || 'the new time'}.`;
+            }
+          } else if (a?.action === 'change_place') {
+            ttsMsg = `Done! Changed your ${a.stop_type || 'stop'} stop to ${a.new_place_name || 'the new place'}.`;
+          } else {
+            ttsMsg = `Done! ${result.understood_command || 'Your trip has been updated.'}`;
+          }
+          Speech.speak(ttsMsg, { language: 'en-IN' });
         } else if (result.success) {
           setVoiceResult(`✓  ${result.understood_command}`);
           setVoiceState('done');
+          Speech.speak(`Done! ${result.understood_command || 'Your trip has been updated.'}`, { language: 'en-IN' });
         } else {
           setVoiceResult(`?  ${result.understood_command || 'Could not understand'}`);
           setVoiceState('error');
+          Speech.speak("Sorry, I couldn't understand. Please try again.", { language: 'en-IN' });
         }
       } catch (err) {
         console.error('Voice command error:', err.message);
         setVoiceResult('⚠  Server error. Try again.');
         setVoiceState('error');
+        Speech.speak("Sorry, I couldn't understand. Please try again.", { language: 'en-IN' });
       } finally {
         scheduleVoiceReset();
       }
@@ -180,6 +231,7 @@ export default function TripPlanScreen({ route, navigation }) {
       setVoiceState(prev => {
         if (prev === 'listening') {
           setVoiceResult('⚠  Nothing heard. Try again.');
+          Speech.speak("Sorry, I couldn't understand. Please try again.", { language: 'en-IN' });
           scheduleVoiceReset();
           return 'error';
         }
@@ -192,6 +244,7 @@ export default function TripPlanScreen({ route, navigation }) {
       setPartialText('');
       setVoiceResult(`⚠  ${data.error === 'not-allowed' ? 'Mic permission denied' : 'Voice error. Try again.'}`);
       setVoiceState('error');
+      Speech.speak("Sorry, I couldn't understand. Please try again.", { language: 'en-IN' });
       scheduleVoiceReset();
       return;
     }
@@ -199,6 +252,7 @@ export default function TripPlanScreen({ route, navigation }) {
     if (data.type === 'unsupported') {
       setVoiceResult('⚠  Voice not supported on this device');
       setVoiceState('error');
+      Speech.speak("Sorry, I couldn't understand. Please try again.", { language: 'en-IN' });
       scheduleVoiceReset();
     }
   };
@@ -213,9 +267,9 @@ export default function TripPlanScreen({ route, navigation }) {
   };
 
   const getVoiceLabel = () => {
-    if (voiceState === 'listening') return partialText || '🔴  Listening...';
+    if (voiceState === 'listening') return partialText || '🔴  Speak now...';
     if (voiceState === 'done' || voiceState === 'error') return voiceResult;
-    return '🎤  Hold to Speak';
+    return '🎤  Tap to Speak';
   };
 
   // ── Stop card ────────────────────────────────────────────────────────────────
@@ -353,8 +407,7 @@ export default function TripPlanScreen({ route, navigation }) {
             { backgroundColor: vs.bg, borderColor: vs.border },
             voiceState === 'processing' && styles.voiceBtnDisabled,
           ]}
-          onPressIn={startListening}
-          onPressOut={stopListening}
+          onPress={handleVoicePress}
           disabled={voiceState === 'processing'}
           activeOpacity={0.8}
         >
@@ -371,7 +424,7 @@ export default function TripPlanScreen({ route, navigation }) {
         </TouchableOpacity>
 
         <Text style={styles.voiceHint}>
-          Say: "Change tea time to 8am" · "Change the lunch stop" · "Move dinner to 9pm"
+          Tap, wait for beep, then speak  ·  "Change tea time to 8am"  ·  "Move dinner to 9pm"
         </Text>
 
         <Text style={styles.sectionTitle}>
