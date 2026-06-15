@@ -57,3 +57,8 @@ export const markProximityVisited = async (tripId, stopId) => {
   const response = await client.patch(`/trips/${tripId}/stops/${stopId}/proximity-visited`);
   return response.data;
 };
+
+export const updateStopByType = async (tripId, params) => {
+  const response = await client.post(`/trips/${tripId}/stops/update-by-type`, params);
+  return response.data;
+};

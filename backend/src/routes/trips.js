@@ -263,6 +263,44 @@ router.post('/:tripId/stops/:stopId/review', authGuard, async (req, res) => {
 });
 
 
+
+// UPDATE STOP BY TYPE — direct DB update for clarified multi-day voice commands, no Gemini call
+router.post('/:id/stops/update-by-type', authGuard, async (req, res) => {
+  try {
+    const { stop_type, day_number, new_time } = req.body;
+    const tripId = req.params.id;
+
+    if (!stop_type || !day_number || !new_time) {
+      return res.status(400).json({ error: 'stop_type, day_number, new_time required' });
+    }
+
+    const tripResult = await pool.query(
+      'SELECT id FROM trips WHERE id = $1 AND user_id = $2',
+      [tripId, req.userId]
+    );
+    if (tripResult.rows.length === 0) return res.status(404).json({ error: 'Trip not found' });
+
+    console.log(`[update-by-type] tripId=${tripId} stop_type=${stop_type} day=${day_number} new_time=${new_time}`);
+
+    const result = await pool.query(
+      `UPDATE trip_stops SET suggested_time = $1
+       WHERE trip_id = $2 AND stop_type = $3 AND day_number = $4
+       RETURNING *`,
+      [new_time, tripId, stop_type, parseInt(day_number, 10)]
+    );
+
+    if (result.rows.length === 0) {
+      console.warn(`[update-by-type] no match for stop_type=${stop_type} day=${day_number}`);
+      return res.json({ success: false, message: `No ${stop_type} stop found on day ${day_number}` });
+    }
+
+    console.log(`[update-by-type] updated stopId=${result.rows[0].id}`);
+    res.json({ success: true, updated_stop: result.rows[0] });
+  } catch (err) {
+    console.error('[update-by-type] error:', err.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
 // QUICK REVIEW — in-trip proximity review (only overall rating, marks stop as visited)
 router.post('/:id/stops/:stopId/quick-review', authGuard, async (req, res) => {
   try {
@@ -351,6 +389,18 @@ router.post('/:id/voice-command', authGuard, async (req, res) => {
 
     const action = await interpretVoiceCommand(command, trip, stopsResult.rows, locationCtx);
     console.log(`[voice] step=action action=${JSON.stringify(action)}`);
+
+    if (action.action === 'ask_day') {
+      const question = `Which day would you like to change the ${action.stop_type} stop? This trip has ${trip.trip_days} days.`;
+      console.log(`[voice] step=ask_day stopType=${action.stop_type} pending=${JSON.stringify(action.pending_change)}`);
+      return res.json({
+        success: true,
+        needs_clarification: true,
+        question,
+        pending_action: { stop_type: action.stop_type, ...action.pending_change },
+        understood_command: action.understood_command,
+      });
+    }
 
     if (action.action === 'unknown') {
       return res.json({

@@ -244,13 +244,14 @@ async function interpretVoiceCommand(commandText, trip, stops, locationCtx = nul
 
     const stopsContext = stops.map(s => {
       const location = s.notes?.split('|')[0]?.trim() || s.stop_type;
-      return `seq=${s.sequence_order} type=${s.stop_type} time=${s.suggested_time?.slice(0, 5) || '?'} place="${location}"`;
+      return `seq=${s.sequence_order} day=${s.day_number || 1} type=${s.stop_type} time=${s.suggested_time?.slice(0, 5) || '?'} place="${location}"`;
     }).join('\n');
 
     console.log(`[voice/gemini] cmd="${commandText}" stops=${stops.length}`);
     console.log(`[voice/gemini] stopsContext:\n${stopsContext}`);
 
-    const prompt = `You are a trip assistant for a ${trip.trip_type} road trip from ${trip.start_location} to ${trip.end_location}.
+    const tripDays = parseInt(trip.trip_days) || 1;
+    const prompt = `You are a trip assistant for a ${trip.trip_type} road trip from ${trip.start_location} to ${trip.end_location} (${tripDays} day${tripDays > 1 ? 's' : ''}).
 
 Current stops:
 ${stopsContext}
@@ -259,14 +260,18 @@ Voice command from user: "${commandText}"
 
 Interpret this command and reply ONLY with one JSON object — no markdown, no explanation:
 
-Update time: {"understood_command":"...","action":"update_time","stop_sequence":N,"new_time":"HH:MM"}
-Change place: {"understood_command":"...","action":"change_place","stop_sequence":N,"stop_type":"...","new_place_name":"Real South India place, City","new_notes":"brief tip","new_price_category":"budget|mid-range|luxury|free"}
-Unknown: {"understood_command":"...","action":"unknown","message":"Could not understand"}
+Update time:  {"understood_command":"...","action":"update_time","stop_sequence":N,"day_number":N,"new_time":"HH:MM"}
+Change place: {"understood_command":"...","action":"change_place","stop_sequence":N,"day_number":N,"stop_type":"...","new_place_name":"Real South India place, City","new_notes":"brief tip","new_price_category":"budget|mid-range|luxury|free"}
+Ask for day:  {"understood_command":"...","action":"ask_day","stop_type":"lunch","pending_change":{"new_time":"14:00"}}
+Unknown:      {"understood_command":"...","action":"unknown","message":"Could not understand"}
 
 Rules:
 - stop_sequence must be one of the seq= numbers listed above
+- day_number must match the day= value of the matched stop in the list above
 - new_place_name must be a real, specific South India establishment (e.g. "Murugan Idli Shop, Salem" not "a restaurant")
-- If the stop type is clear but no specific place was named, suggest a real appropriate one along the route`;
+- If the stop type is clear but no specific place was named, suggest a real appropriate one along the route
+- If this trip has ${tripDays} day(s) and the command mentions a stop type that appears on multiple days WITHOUT specifying which day, use action "ask_day"
+- Day references in commands: "first day" or "day 1" = 1, "second day" or "day 2" = 2, "last day" = ${tripDays}`;
 
     let result;
     try {

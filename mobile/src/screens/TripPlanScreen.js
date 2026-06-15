@@ -6,7 +6,7 @@ import {
 import { WebView } from 'react-native-webview';
 import * as Speech from 'expo-speech';
 import * as Location from 'expo-location';
-import { getTrip, getTripStops, voiceCommand } from '../api/trips';
+import { getTrip, getTripStops, voiceCommand, updateStopByType } from '../api/trips';
 
 const STOP_ICONS = {
   tea: '☕',
@@ -40,7 +40,19 @@ const VOICE_STYLE = {
   error:      { bg: '#7f1d1d', border: '#ef4444' },
 };
 
-// Inline HTML that runs webkitSpeechRecognition and posts messages back to RN
+// Extract day number from a spoken phrase like "Day 1", "second day", "two", "day two"
+function extractDayNumber(text) {
+  const t = text.toLowerCase();
+  const digit = t.match(/\b(\d+)\b/);
+  if (digit) return parseInt(digit[1], 10);
+  const words = { first: 1, one: 1, second: 2, two: 2, third: 3, three: 3, fourth: 4, four: 4 };
+  for (const [word, num] of Object.entries(words)) {
+    if (t.includes(word)) return num;
+  }
+  return null;
+}
+
+// Command recognition WebView — single utterance, posts result back to RN
 const SPEECH_HTML = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"></head>
 <body>
@@ -71,7 +83,6 @@ const SPEECH_HTML = `<!DOCTYPE html>
   };
 
   rec.onerror = function(e) {
-    // no-speech just means silence — let the 'end' event handle the UI
     if (e.error === 'no-speech') return;
     window.ReactNativeWebView.postMessage(JSON.stringify({type:'error',error:e.error}));
   };
@@ -88,6 +99,60 @@ const SPEECH_HTML = `<!DOCTYPE html>
 <\/script>
 </body></html>`;
 
+// Wake word WebView — loops continuously, fires {type:'wake'} when "payanam" heard
+const WAKE_WORD_HTML = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"></head>
+<body>
+<script>
+(function() {
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return;
+  var rec = new SR();
+  rec.lang = 'en-IN';
+  rec.continuous = false;
+  rec.interimResults = true;
+  rec.maxAlternatives = 5;
+  var paused = false;
+
+  function checkForWake(transcript) {
+    var t = transcript.toLowerCase();
+    // 'payan' covers payanam, payan am, payyanam — also accept common greetings
+    return t.indexOf('payan') !== -1 ||
+           t.indexOf('hey payanam') !== -1 ||
+           t.indexOf('hi payanam') !== -1;
+  }
+
+  rec.onresult = function(e) {
+    if (paused) return;
+    for (var i = e.resultIndex; i < e.results.length; i++) {
+      // Check both interim and final results for faster response
+      for (var j = 0; j < e.results[i].length; j++) {
+        if (checkForWake(e.results[i][j].transcript)) {
+          window.ReactNativeWebView.postMessage(JSON.stringify({type:'wake'}));
+          return;
+        }
+      }
+    }
+  };
+
+  rec.onerror = function(e) {
+    if (paused) return;
+    setTimeout(function() { if (!paused) { try { rec.start(); } catch(ex) {} } }, 100);
+  };
+
+  rec.onend = function() {
+    if (!paused) { try { rec.start(); } catch(ex) {} }
+  };
+
+  window.pauseWake  = function() { paused = true;  try { rec.stop();  } catch(ex) {} };
+  window.resumeWake = function() { paused = false; try { rec.start(); } catch(ex) {} };
+
+  // Auto-start quickly — WebView is already settled by the time user sees this screen
+  setTimeout(function() { try { rec.start(); } catch(ex) {} }, 100);
+})();
+<\/script>
+</body></html>`;
+
 export default function TripPlanScreen({ route, navigation }) {
   const { tripId, plan: initialPlan } = route.params;
   const [plan, setPlan] = useState(initialPlan || null);
@@ -97,13 +162,20 @@ export default function TripPlanScreen({ route, navigation }) {
   const [voiceState, setVoiceState] = useState('idle');
   const [voiceResult, setVoiceResult] = useState('');
   const [partialText, setPartialText] = useState('');
+  const [clarificationPrompt, setClarificationPrompt] = useState('');
   const speechRef = useRef(null);
+  const wakeRef = useRef(null);
   const voiceResetTimer = useRef(null);
+  const clarificationRef = useRef(null);
 
   useEffect(() => {
     if (!initialPlan) loadPlan();
     loadTrip();
-    return () => { if (voiceResetTimer.current) clearTimeout(voiceResetTimer.current); };
+    return () => {
+      if (voiceResetTimer.current) clearTimeout(voiceResetTimer.current);
+      // Stop wake word loop on unmount
+      wakeRef.current?.injectJavaScript('window.pauseWake(); true;');
+    };
   }, []);
 
   const loadPlan = async () => {
@@ -122,14 +194,38 @@ export default function TripPlanScreen({ route, navigation }) {
     catch (err) { console.error(err); }
   };
 
+  // ── Wake word ─────────────────────────────────────────────────────────────────
+
+  const handleWakeMessage = (event) => {
+    let data;
+    try { data = JSON.parse(event.nativeEvent.data); } catch (_) { return; }
+
+    if (data.type === 'wake') {
+      // Ignore if already busy
+      if (voiceState === 'processing' || voiceState === 'listening') return;
+      // Pause wake listener so it doesn't grab the mic during command
+      wakeRef.current?.injectJavaScript('window.pauseWake(); true;');
+      setPartialText('');
+      setVoiceResult('');
+      setVoiceState('listening');
+      // Speak confirmation, then start command recognition in onDone
+      Speech.speak('Yes, I am listening', {
+        language: 'en-IN',
+        onDone: () => speechRef.current?.injectJavaScript('window.startRecognition(); true;'),
+      });
+    }
+  };
+
   // ── Voice ────────────────────────────────────────────────────────────────────
 
   const startListening = () => {
     if (voiceState === 'processing' || voiceState === 'listening') return;
+    // Pause wake word so it doesn't compete for the mic
+    wakeRef.current?.injectJavaScript('window.pauseWake(); true;');
     setPartialText('');
     setVoiceResult('');
     setVoiceState('listening');
-    // Start recognition only after TTS finishes — prevents the mic capturing "Listening"
+    // Start recognition only after TTS finishes — prevents mic capturing "Listening"
     Speech.speak('Listening', {
       language: 'en-IN',
       onDone: () => speechRef.current?.injectJavaScript('window.startRecognition(); true;'),
@@ -161,6 +257,81 @@ export default function TripPlanScreen({ route, navigation }) {
 
     if (data.type === 'result') {
       setPartialText('');
+
+      // Fast path: if we're in clarification mode, extract the day number locally and hit DB directly
+      let commandText = data.text;
+      console.log(`[clarify] result arrived text="${data.text}" clarificationRef=${JSON.stringify(clarificationRef.current)}`);
+      if (clarificationRef.current) {
+        const pending = clarificationRef.current;
+        const dayNumber = extractDayNumber(data.text);
+        clarificationRef.current = null;
+        setClarificationPrompt('');
+        console.log(`[clarify] second turn dayNumber=${dayNumber} pending=${JSON.stringify(pending)}`);
+
+        if (dayNumber && pending.new_time) {
+          // Skip Gemini entirely — update DB directly via the type+day endpoint
+          setVoiceState('processing');
+          try {
+            let locationCtx = {};
+            try {
+              const { status } = await Location.requestForegroundPermissionsAsync();
+              if (status === 'granted') {
+                const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+                const now = new Date();
+                locationCtx = {
+                  current_lat: loc.coords.latitude,
+                  current_lng: loc.coords.longitude,
+                  current_time: `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`,
+                  avg_speed_kmh: 60,
+                };
+              }
+            } catch (_) {}
+
+            console.log(`[clarify] fast-path updateStopByType stop_type=${pending.stop_type} day=${dayNumber} new_time=${pending.new_time}`);
+            const result = await updateStopByType(tripId, {
+              stop_type: pending.stop_type,
+              day_number: dayNumber,
+              new_time: pending.new_time,
+              ...locationCtx,
+            });
+            console.log(`[clarify] fast-path result success=${result.success} updated_stop=${result.updated_stop?.id ?? 'null'}`);
+
+            if (result.success) {
+              setVoiceResult(`✓  Changed ${pending.stop_type} to ${pending.new_time} on day ${dayNumber}`);
+              setVoiceState('done');
+              if (result.updated_stop) {
+                setPlan(prev => ({
+                  ...(prev || {}),
+                  stops: (prev?.stops || []).map(s =>
+                    s.id === result.updated_stop.id ? { ...s, ...result.updated_stop } : s
+                  ),
+                }));
+              }
+              Speech.speak(`Done! Changed your ${pending.stop_type} time to ${pending.new_time} on day ${dayNumber}.`, { language: 'en-IN' });
+            } else {
+              setVoiceResult(`⚠  No ${pending.stop_type} stop on day ${dayNumber}`);
+              setVoiceState('error');
+              Speech.speak(`Sorry, I couldn't find a ${pending.stop_type} stop on day ${dayNumber}.`, { language: 'en-IN' });
+            }
+          } catch (err) {
+            console.error('[clarify] fast-path error:', err.message);
+            setVoiceResult('⚠  Server error. Try again.');
+            setVoiceState('error');
+            Speech.speak("Sorry, I couldn't understand. Please try again.", { language: 'en-IN' });
+          }
+          scheduleVoiceReset();
+          return;
+        }
+
+        // Couldn't extract a day number — fall through to Gemini with reconstructed command
+        if (pending.new_time) {
+          commandText = `change ${pending.stop_type} time to ${pending.new_time} on ${data.text}`;
+        } else if (pending.new_place_name) {
+          commandText = `change ${pending.stop_type} to ${pending.new_place_name} on ${data.text}`;
+        }
+        console.log(`[clarify] no day extracted, Gemini fallback commandText="${commandText}"`);
+      }
+
       setVoiceState('processing');
       try {
         // Get GPS location to send with the command for location-aware stop updates
@@ -181,7 +352,37 @@ export default function TripPlanScreen({ route, navigation }) {
           }
         } catch (_) { /* location unavailable — proceed without it */ }
 
-        const result = await voiceCommand(tripId, data.text, locationCtx);
+        console.log(`[clarify] sending to backend commandText="${commandText}"`);
+        const result = await voiceCommand(tripId, commandText, locationCtx);
+        console.log(`[clarify] backend returned needs_clarification=${result.needs_clarification} success=${result.success} action=${result.action?.action} updated_stop=${result.updated_stop?.id ?? 'null'}`);
+
+        // Multi-day clarification: Gemini needs to know which day — speak question and re-listen
+        if (result.needs_clarification && result.question) {
+          clarificationRef.current = result.pending_action;
+          console.log(`[clarify] asking day: question="${result.question}" pending=${JSON.stringify(result.pending_action)}`);
+          setClarificationPrompt('Say: "Day 1" or "Day 2"');
+          setVoiceResult(`?  ${result.question}`);
+          setVoiceState('listening');
+          Speech.speak(result.question, {
+            language: 'en-IN',
+            onDone: () => {
+              console.log('[clarify] TTS done — starting recognition for day answer');
+              speechRef.current?.injectJavaScript('window.startRecognition(); true;');
+            },
+          });
+          // 15s abort — if user doesn't answer, cancel clarification and go idle
+          if (voiceResetTimer.current) clearTimeout(voiceResetTimer.current);
+          voiceResetTimer.current = setTimeout(() => {
+            clarificationRef.current = null;
+            setClarificationPrompt('');
+            setVoiceState('idle');
+            setVoiceResult('');
+            setPartialText('');
+            wakeRef.current?.injectJavaScript('window.resumeWake(); true;');
+          }, 15000);
+          return;
+        }
+
         if (result.success && result.updated_stop) {
           setVoiceResult(`✓  ${result.understood_command}`);
           setVoiceState('done');
@@ -205,21 +406,23 @@ export default function TripPlanScreen({ route, navigation }) {
             ttsMsg = `Done! ${result.understood_command || 'Your trip has been updated.'}`;
           }
           Speech.speak(ttsMsg, { language: 'en-IN' });
+          scheduleVoiceReset();
         } else if (result.success) {
           setVoiceResult(`✓  ${result.understood_command}`);
           setVoiceState('done');
           Speech.speak(`Done! ${result.understood_command || 'Your trip has been updated.'}`, { language: 'en-IN' });
+          scheduleVoiceReset();
         } else {
           setVoiceResult(`?  ${result.understood_command || 'Could not understand'}`);
           setVoiceState('error');
           Speech.speak("Sorry, I couldn't understand. Please try again.", { language: 'en-IN' });
+          scheduleVoiceReset();
         }
       } catch (err) {
         console.error('Voice command error:', err.message);
         setVoiceResult('⚠  Server error. Try again.');
         setVoiceState('error');
         Speech.speak("Sorry, I couldn't understand. Please try again.", { language: 'en-IN' });
-      } finally {
         scheduleVoiceReset();
       }
       return;
@@ -227,7 +430,6 @@ export default function TripPlanScreen({ route, navigation }) {
 
     if (data.type === 'end') {
       setPartialText('');
-      // Only fire "nothing heard" if we never got a result (still in listening state)
       setVoiceState(prev => {
         if (prev === 'listening') {
           setVoiceResult('⚠  Nothing heard. Try again.');
@@ -263,6 +465,9 @@ export default function TripPlanScreen({ route, navigation }) {
       setVoiceState('idle');
       setVoiceResult('');
       setPartialText('');
+      setClarificationPrompt('');
+      // Resume wake word listener now that mic is free
+      wakeRef.current?.injectJavaScript('window.resumeWake(); true;');
     }, 4000);
   };
 
@@ -341,7 +546,8 @@ export default function TripPlanScreen({ route, navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Hidden WebView — Web Speech API bridge */}
+
+      {/* Command recognition WebView — hidden 1×1, triggered by button or wake word */}
       <WebView
         ref={speechRef}
         source={{ html: SPEECH_HTML }}
@@ -349,6 +555,20 @@ export default function TripPlanScreen({ route, navigation }) {
         javaScriptEnabled={true}
         originWhitelist={['*']}
         onMessage={handleSpeechMessage}
+        onPermissionRequest={({ nativeEvent }) => {
+          if (nativeEvent.grant) nativeEvent.grant(nativeEvent.resources);
+        }}
+        mediaPlaybackRequiresUserGesture={false}
+      />
+
+      {/* Wake word WebView — always-on loop, posts {type:'wake'} on "payanam" */}
+      <WebView
+        ref={wakeRef}
+        source={{ html: WAKE_WORD_HTML }}
+        style={styles.hiddenWebView}
+        javaScriptEnabled={true}
+        originWhitelist={['*']}
+        onMessage={handleWakeMessage}
         onPermissionRequest={({ nativeEvent }) => {
           if (nativeEvent.grant) nativeEvent.grant(nativeEvent.resources);
         }}
@@ -423,8 +643,14 @@ export default function TripPlanScreen({ route, navigation }) {
           )}
         </TouchableOpacity>
 
+        {clarificationPrompt ? (
+          <View style={styles.clarificationBanner}>
+            <Text style={styles.clarificationText}>{clarificationPrompt}</Text>
+          </View>
+        ) : null}
+
         <Text style={styles.voiceHint}>
-          Tap, wait for beep, then speak  ·  "Change tea time to 8am"  ·  "Move dinner to 9pm"
+          Say "Payanam" to activate  ·  or tap  ·  "Change tea time to 8am"
         </Text>
 
         <Text style={styles.sectionTitle}>
@@ -444,6 +670,12 @@ export default function TripPlanScreen({ route, navigation }) {
         ))}
 
       </ScrollView>
+
+      {/* Always-on wake word indicator */}
+      <View style={styles.wakeIndicator}>
+        <Text style={styles.wakeIndicatorText}>🎤  Payanam is listening...</Text>
+      </View>
+
     </SafeAreaView>
   );
 }
@@ -498,6 +730,16 @@ const styles = StyleSheet.create({
   voiceBtnDisabled: { opacity: 0.6 },
   voiceRow: { flexDirection: 'row', alignItems: 'center' },
   voiceBtnText: { color: '#fff', fontSize: 14, fontWeight: 'bold', textAlign: 'center' },
+  clarificationBanner: {
+    backgroundColor: '#1e3a5f',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 6,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#f97316',
+  },
+  clarificationText: { color: '#f97316', fontSize: 13, fontWeight: 'bold' },
   voiceHint: {
     color: '#475569', fontSize: 11, textAlign: 'center',
     marginBottom: 20, lineHeight: 16,
@@ -507,4 +749,12 @@ const styles = StyleSheet.create({
     padding: 10, marginBottom: 8, marginTop: 8
   },
   dayTitle: { color: '#f97316', fontSize: 15, fontWeight: 'bold' },
+  wakeIndicator: {
+    backgroundColor: '#0f172a',
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#1e293b',
+  },
+  wakeIndicatorText: { color: '#334155', fontSize: 12 },
 });
