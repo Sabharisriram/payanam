@@ -1,13 +1,14 @@
-const axios = require('axios');
+﻿const axios = require('axios');
 
 // Convert location name to coordinates using Nominatim
 async function geocodeLocation(locationName) {
   try {
-    // Extract just the key place name (last meaningful part)
     const cleaned = locationName
       .replace(/roadside stall|near|just after|on the way to|viewpoint on|local cafe or tea shop near/gi, '')
       .split(',')[0]
       .trim();
+
+    console.log('[geocode] input="' + locationName + '" cleaned="' + cleaned + '"');
 
     const response = await axios.get('https://nominatim.openstreetmap.org/search', {
       params: {
@@ -16,19 +17,27 @@ async function geocodeLocation(locationName) {
         limit: 1
       },
       headers: {
-        'User-Agent': 'Payanam Travel App (payanam@gmail.com)'
-      }
+        'User-Agent': 'Payanam/1.0 (contact@payanam.app)'
+      },
+      timeout: 8000,
     });
 
-    if (response.data.length === 0) return null;
+    console.log('[geocode] Nominatim returned ' + response.data.length + ' results for "' + cleaned + '"');
 
-    return {
+    if (response.data.length === 0) {
+      console.warn('[geocode] no results for "' + cleaned + '"');
+      return null;
+    }
+
+    const result = {
       lat: parseFloat(response.data[0].lat),
       lng: parseFloat(response.data[0].lon),
       display_name: response.data[0].display_name
     };
+    console.log('[geocode] lat=' + result.lat + ' lng=' + result.lng + ' display="' + result.display_name + '"');
+    return result;
   } catch (err) {
-    console.error('Geocode error:', err.message);
+    console.error('[geocode] error:', err.message);
     return null;
   }
 }
