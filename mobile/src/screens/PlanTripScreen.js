@@ -152,42 +152,47 @@ export default function PlanTripScreen({ navigation }) {
 
         <Text style={styles.title}>Plan Your Trip</Text>
 
-        <Text style={styles.label}>Trip Name</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="e.g. Coimbatore to Ooty"
-          placeholderTextColor={C.INK_MUTED}
-          value={tripName}
-          onChangeText={setTripName}
-        />
+        {/* ROUTE */}
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionLabel}>ROUTE</Text>
+          <Text style={styles.label}>Trip Name</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="e.g. Coimbatore to Ooty"
+            placeholderTextColor={C.INK_MUTED}
+            value={tripName}
+            onChangeText={setTripName}
+          />
+          <Text style={styles.label}>From</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Starting location"
+            placeholderTextColor={C.INK_MUTED}
+            value={startLocation}
+            onChangeText={setStartLocation}
+          />
+          <Text style={styles.label}>To</Text>
+          <TextInput
+            style={[styles.input, styles.inputLast]}
+            placeholder="Destination"
+            placeholderTextColor={C.INK_MUTED}
+            value={endLocation}
+            onChangeText={setEndLocation}
+          />
+        </View>
 
-        <Text style={styles.label}>From</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Starting location"
-          placeholderTextColor={C.INK_MUTED}
-          value={startLocation}
-          onChangeText={setStartLocation}
-        />
-
-        <Text style={styles.label}>To</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Destination"
-          placeholderTextColor={C.INK_MUTED}
-          value={endLocation}
-          onChangeText={setEndLocation}
-        />
-
-        <Text style={styles.label}>Date</Text>
-        <TouchableOpacity style={styles.pickerBtn} onPress={() => setShowDatePicker(true)}>
-          <Text style={styles.pickerBtnText}>📅  {formatDateDisplay(startDateObj)}</Text>
-        </TouchableOpacity>
-
-        <Text style={styles.label}>Start Time</Text>
-        <TouchableOpacity style={styles.pickerBtn} onPress={() => setShowTimePicker(true)}>
-          <Text style={styles.pickerBtnText}>🕐  {formatTimeDisplay(startTimeObj)}</Text>
-        </TouchableOpacity>
+        {/* SCHEDULE */}
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionLabel}>SCHEDULE</Text>
+          <Text style={styles.label}>Date</Text>
+          <TouchableOpacity style={styles.pickerBtn} onPress={() => setShowDatePicker(true)}>
+            <Text style={styles.pickerBtnText}>📅  {formatDateDisplay(startDateObj)}</Text>
+          </TouchableOpacity>
+          <Text style={styles.label}>Start Time</Text>
+          <TouchableOpacity style={[styles.pickerBtn, styles.inputLast]} onPress={() => setShowTimePicker(true)}>
+            <Text style={styles.pickerBtnText}>🕐  {formatTimeDisplay(startTimeObj)}</Text>
+          </TouchableOpacity>
+        </View>
 
         {showDatePicker && (
           <DateTimePicker
@@ -208,45 +213,51 @@ export default function PlanTripScreen({ navigation }) {
           />
         )}
 
-        <Text style={styles.label}>Number of Members</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Number of members"
-          placeholderTextColor={C.INK_MUTED}
-          keyboardType="number-pad"
-          value={members}
-          onChangeText={setMembers}
-        />
+        {/* PASSENGERS */}
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionLabel}>PASSENGERS</Text>
+          <Text style={styles.label}>Number of Members</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Number of members"
+            placeholderTextColor={C.INK_MUTED}
+            keyboardType="number-pad"
+            value={members}
+            onChangeText={setMembers}
+          />
+          <Text style={styles.label}>Number of Days</Text>
+          <TextInput
+            style={[styles.input, styles.inputLast]}
+            placeholder="How many days? e.g. 2"
+            placeholderTextColor={C.INK_MUTED}
+            keyboardType="number-pad"
+            value={tripDays}
+            onChangeText={setTripDays}
+          />
+        </View>
 
-        <Text style={styles.label}>Number of Days</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="How many days? e.g. 2"
-          placeholderTextColor={C.INK_MUTED}
-          keyboardType="number-pad"
-          value={tripDays}
-          onChangeText={setTripDays}
-        />
-
-        <Selector label="Trip Type" options={TRIP_TYPES} value={tripType} onChange={setTripType} />
-        <Selector label="Vehicle" options={VEHICLES} value={vehicle} onChange={setVehicle} />
-        <Selector label="Planning Mode" options={PLANNING_MODES} value={planningMode} onChange={setPlanningMode} />
-        <Text style={styles.modeDesc}>{MODE_DESCRIPTIONS[planningMode]}</Text>
-
-        {planningMode === 'customized' && (
-          <>
-            <Text style={styles.label}>Your Places (one per line)</Text>
-            <TextInput
-              style={[styles.input, styles.multilineInput]}
-              placeholder={'e.g. Pykara Lake, Ooty\nEmerald Dam\nDoddabetta Peak'}
-              placeholderTextColor={C.INK_MUTED}
-              multiline
-              numberOfLines={4}
-              value={customPlaces}
-              onChangeText={setCustomPlaces}
-            />
-          </>
-        )}
+        {/* PREFERENCES */}
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionLabel}>PREFERENCES</Text>
+          <Selector label="Trip Type" options={TRIP_TYPES} value={tripType} onChange={setTripType} />
+          <Selector label="Vehicle" options={VEHICLES} value={vehicle} onChange={setVehicle} />
+          <Selector label="Planning Mode" options={PLANNING_MODES} value={planningMode} onChange={setPlanningMode} />
+          <Text style={styles.modeDesc}>{MODE_DESCRIPTIONS[planningMode]}</Text>
+          {planningMode === 'customized' && (
+            <>
+              <Text style={styles.label}>Your Places (one per line)</Text>
+              <TextInput
+                style={[styles.input, styles.multilineInput, styles.inputLast]}
+                placeholder={'e.g. Pykara Lake, Ooty\nEmerald Dam\nDoddabetta Peak'}
+                placeholderTextColor={C.INK_MUTED}
+                multiline
+                numberOfLines={4}
+                value={customPlaces}
+                onChangeText={setCustomPlaces}
+              />
+            </>
+          )}
+        </View>
 
         <TouchableOpacity
           style={styles.button}
@@ -303,6 +314,23 @@ const styles = StyleSheet.create({
   buttonText: { color: '#fff', fontSize: 16, fontFamily: FONTS.bodyBold },
   loadingText: { color: '#fff', fontSize: 15, fontFamily: FONTS.bodyBold, marginTop: 10 },
   loadingSubText: { color: 'rgba(255,255,255,0.7)', fontSize: 13, fontFamily: FONTS.body, marginTop: 4 },
-  modeDesc: { color: C.INK_MUTED, fontSize: 12, fontFamily: FONTS.body, marginBottom: 14, marginTop: -6, paddingLeft: 2 },
+  modeDesc: { color: C.INK_MUTED, fontSize: 12, fontFamily: FONTS.body, marginBottom: 8, marginTop: -6, paddingLeft: 2 },
   multilineInput: { height: 100, textAlignVertical: 'top' },
+  inputLast: { marginBottom: 0 },
+  sectionCard: {
+    backgroundColor: C.CARD,
+    borderWidth: 1,
+    borderColor: C.BORDER,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  sectionLabel: {
+    color: C.PRIMARY,
+    fontSize: 11,
+    fontFamily: FONTS.bodyBold,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    marginBottom: 12,
+  },
 });

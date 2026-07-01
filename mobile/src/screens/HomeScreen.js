@@ -118,12 +118,17 @@ export default function HomeScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity
-        style={styles.planButton}
-        onPress={() => navigation.navigate('PlanTrip')}
-      >
-        <Text style={styles.planButtonText}>+ Plan a New Trip</Text>
-      </TouchableOpacity>
+      <View style={styles.heroCard}>
+        <View style={styles.heroCircle1} pointerEvents="none" />
+        <View style={styles.heroCircle2} pointerEvents="none" />
+        <Text style={styles.heroTagline}>Ready for your next journey?</Text>
+        <TouchableOpacity
+          style={styles.heroBtn}
+          onPress={() => navigation.navigate('PlanTrip')}
+        >
+          <Text style={styles.heroBtnText}>+ Plan a New Trip</Text>
+        </TouchableOpacity>
+      </View>
 
       <Text style={styles.sectionTitle}>Your Trips</Text>
 
@@ -154,17 +159,51 @@ const styles = StyleSheet.create({
   greeting: { fontSize: 20, fontFamily: FONTS.bodyBold, color: C.INK },
   subtitle: { fontSize: 13, fontFamily: FONTS.body, color: C.INK_MUTED, marginTop: 2 },
   logout: { color: C.PRIMARY, fontSize: 14, fontFamily: FONTS.body },
-  planButton: {
-    backgroundColor: C.PRIMARY, margin: 20, borderRadius: 12,
-    padding: 16, alignItems: 'center'
+  heroCard: {
+    backgroundColor: C.PRIMARY,
+    height: 140,
+    borderRadius: 16,
+    marginHorizontal: 20,
+    marginBottom: 20,
+    padding: 20,
+    overflow: 'hidden',
+    justifyContent: 'space-between',
   },
-  planButtonText: { color: '#fff', fontSize: 16, fontFamily: FONTS.bodyBold },
+  heroCircle1: {
+    position: 'absolute',
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    top: -35,
+    right: -25,
+  },
+  heroCircle2: {
+    position: 'absolute',
+    width: 75,
+    height: 75,
+    borderRadius: 37.5,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    bottom: -20,
+    right: 70,
+  },
+  heroTagline: { color: '#fff', fontSize: 18, fontFamily: FONTS.bodyBold },
+  heroBtn: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    alignSelf: 'flex-start',
+  },
+  heroBtnText: { color: C.PRIMARY, fontSize: 14, fontFamily: FONTS.bodyBold },
   sectionTitle: { color: C.INK_MUTED, fontSize: 13, fontFamily: FONTS.body, marginLeft: 20, marginBottom: 10 },
   tripCard: {
     backgroundColor: C.CARD, marginHorizontal: 20,
     marginBottom: 14, borderRadius: 12, padding: 18,
     borderWidth: 1,
     borderColor: C.BORDER,
+    borderLeftWidth: 3,
+    borderLeftColor: C.PRIMARY,
     ...SHADOWS.sm,
   },
   tripName: { color: C.INK, fontSize: 16, fontFamily: FONTS.bodyBold, marginBottom: 4 },

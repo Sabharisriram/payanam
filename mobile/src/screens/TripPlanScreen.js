@@ -794,7 +794,7 @@ const styles = StyleSheet.create({
     ...SHADOWS.sm,
   },
   tripName: { color: C.INK, fontSize: 20, fontFamily: FONTS.display, marginBottom: 4 },
-  tripRoute: { color: C.ACCENT, fontSize: 15, fontFamily: FONTS.body, marginBottom: 4 },
+  tripRoute: { color: C.PRIMARY, fontSize: 15, fontFamily: FONTS.body, marginBottom: 4 },
   tripMeta: { color: C.INK_MUTED, fontSize: 13, fontFamily: FONTS.body },
   sectionTitle: { color: C.INK_MUTED, fontSize: 13, fontFamily: FONTS.body, marginBottom: 16 },
 
@@ -876,7 +876,7 @@ const styles = StyleSheet.create({
 
   actionRow: { flexDirection: 'row', gap: 10, marginBottom: 10 },
   actionBtn: { flex: 1, borderRadius: 12, padding: 14, alignItems: 'center' },
-  liveBtn: { backgroundColor: '#16a34a' },
+  liveBtn: { backgroundColor: C.PRIMARY },
   mapBtn: { backgroundColor: C.CARD_ALT, borderWidth: 1, borderColor: C.PRIMARY },
   actionBtnText: { color: '#fff', fontSize: 14, fontFamily: FONTS.bodyBold },
   mapBtnText: { color: C.INK, fontSize: 14, fontFamily: FONTS.bodyBold },
