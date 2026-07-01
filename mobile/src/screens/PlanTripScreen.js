@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
-  StyleSheet, ScrollView, ActivityIndicator, Alert, SafeAreaView
+  StyleSheet, ScrollView, ActivityIndicator, Alert, SafeAreaView, Animated
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { createTrip, generatePlan } from '../api/trips';
+import { C, FONTS } from '../theme/colors';
 
 const TRIP_TYPES = ['solo', 'family', 'friends', 'boys', 'bachelor'];
 const VEHICLES = ['car', 'bike', 'bus', 'auto'];
@@ -37,6 +38,52 @@ const formatTimeDisplay = (d) =>
 const formatTimeAPI = (d) =>
   `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 
+// ── Animated chip — scale-bounce on press ──────────────────────────────────
+function AnimatedChip({ opt, selected, onPress }) {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  const handlePress = () => {
+    Animated.sequence([
+      Animated.timing(scale, { toValue: 1.08, duration: 70, useNativeDriver: true }),
+      Animated.spring(scale, { toValue: 1, useNativeDriver: true, tension: 300, friction: 10 }),
+    ]).start();
+    onPress(opt);
+  };
+
+  return (
+    <TouchableOpacity onPress={handlePress} activeOpacity={1} style={styles.chipTouch}>
+      <Animated.View style={[
+        styles.chip,
+        selected && styles.chipSelected,
+        { transform: [{ scale }] },
+      ]}>
+        <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+          {opt.charAt(0).toUpperCase() + opt.slice(1)}
+        </Text>
+      </Animated.View>
+    </TouchableOpacity>
+  );
+}
+
+function Selector({ label, options, value, onChange }) {
+  return (
+    <View style={styles.selectorContainer}>
+      <Text style={styles.label}>{label}</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        {options.map(opt => (
+          <AnimatedChip
+            key={opt}
+            opt={opt}
+            selected={value === opt}
+            onPress={onChange}
+          />
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
+// ── Main screen ────────────────────────────────────────────────────────────
 export default function PlanTripScreen({ navigation }) {
   const [tripName, setTripName] = useState('');
   const [startLocation, setStartLocation] = useState('');
@@ -95,25 +142,6 @@ export default function PlanTripScreen({ navigation }) {
     }
   };
 
-  const Selector = ({ label, options, value, onChange }) => (
-    <View style={styles.selectorContainer}>
-      <Text style={styles.label}>{label}</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        {options.map(opt => (
-          <TouchableOpacity
-            key={opt}
-            style={[styles.chip, value === opt && styles.chipSelected]}
-            onPress={() => onChange(opt)}
-          >
-            <Text style={[styles.chipText, value === opt && styles.chipTextSelected]}>
-              {opt.charAt(0).toUpperCase() + opt.slice(1)}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-    </View>
-  );
-
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.inner}>
@@ -128,7 +156,7 @@ export default function PlanTripScreen({ navigation }) {
         <TextInput
           style={styles.input}
           placeholder="e.g. Coimbatore to Ooty"
-          placeholderTextColor="#888"
+          placeholderTextColor={C.INK_MUTED}
           value={tripName}
           onChangeText={setTripName}
         />
@@ -137,7 +165,7 @@ export default function PlanTripScreen({ navigation }) {
         <TextInput
           style={styles.input}
           placeholder="Starting location"
-          placeholderTextColor="#888"
+          placeholderTextColor={C.INK_MUTED}
           value={startLocation}
           onChangeText={setStartLocation}
         />
@@ -146,7 +174,7 @@ export default function PlanTripScreen({ navigation }) {
         <TextInput
           style={styles.input}
           placeholder="Destination"
-          placeholderTextColor="#888"
+          placeholderTextColor={C.INK_MUTED}
           value={endLocation}
           onChangeText={setEndLocation}
         />
@@ -184,7 +212,7 @@ export default function PlanTripScreen({ navigation }) {
         <TextInput
           style={styles.input}
           placeholder="Number of members"
-          placeholderTextColor="#888"
+          placeholderTextColor={C.INK_MUTED}
           keyboardType="number-pad"
           value={members}
           onChangeText={setMembers}
@@ -194,7 +222,7 @@ export default function PlanTripScreen({ navigation }) {
         <TextInput
           style={styles.input}
           placeholder="How many days? e.g. 2"
-          placeholderTextColor="#888"
+          placeholderTextColor={C.INK_MUTED}
           keyboardType="number-pad"
           value={tripDays}
           onChangeText={setTripDays}
@@ -211,7 +239,7 @@ export default function PlanTripScreen({ navigation }) {
             <TextInput
               style={[styles.input, styles.multilineInput]}
               placeholder={'e.g. Pykara Lake, Ooty\nEmerald Dam\nDoddabetta Peak'}
-              placeholderTextColor="#888"
+              placeholderTextColor={C.INK_MUTED}
               multiline
               numberOfLines={4}
               value={customPlaces}
@@ -243,35 +271,38 @@ export default function PlanTripScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
+  container: { flex: 1, backgroundColor: C.BG },
   inner: { padding: 20, paddingBottom: 40 },
-  back: { color: '#f97316', fontSize: 16, marginBottom: 16 },
-  title: { fontSize: 24, fontWeight: 'bold', color: '#fff', marginBottom: 24 },
-  label: { color: '#94a3b8', fontSize: 13, marginBottom: 6, marginTop: 4 },
+  back: { color: C.PRIMARY, fontSize: 16, fontFamily: FONTS.body, marginBottom: 16 },
+  title: { fontSize: 24, fontFamily: FONTS.display, color: C.INK, marginBottom: 24 },
+  label: { color: C.INK_MUTED, fontSize: 13, fontFamily: FONTS.body, marginBottom: 6, marginTop: 4 },
   input: {
-    backgroundColor: '#1e293b', color: '#fff', borderRadius: 10,
-    padding: 14, marginBottom: 14, fontSize: 15, borderWidth: 1, borderColor: '#334155',
+    backgroundColor: C.CARD, color: C.INK, borderRadius: 10,
+    padding: 14, marginBottom: 14, fontSize: 15,
+    fontFamily: FONTS.body,
+    borderWidth: 1, borderColor: C.BORDER,
   },
   pickerBtn: {
-    backgroundColor: '#1e293b', borderRadius: 10, padding: 14,
-    marginBottom: 14, borderWidth: 1, borderColor: '#334155',
+    backgroundColor: C.CARD, borderRadius: 10, padding: 14,
+    marginBottom: 14, borderWidth: 1, borderColor: C.BORDER,
   },
-  pickerBtnText: { color: '#fff', fontSize: 15 },
+  pickerBtnText: { color: C.INK, fontSize: 15, fontFamily: FONTS.body },
   selectorContainer: { marginBottom: 16 },
+  chipTouch: { marginRight: 8 },
   chip: {
-    backgroundColor: '#1e293b', borderRadius: 20, paddingHorizontal: 16,
-    paddingVertical: 8, marginRight: 8, borderWidth: 1, borderColor: '#334155',
+    backgroundColor: C.CARD, borderRadius: 20, paddingHorizontal: 16,
+    paddingVertical: 8, borderWidth: 1, borderColor: C.BORDER,
   },
-  chipSelected: { backgroundColor: '#f97316', borderColor: '#f97316' },
-  chipText: { color: '#94a3b8', fontSize: 14 },
-  chipTextSelected: { color: '#fff', fontWeight: 'bold' },
+  chipSelected: { backgroundColor: C.PRIMARY, borderColor: C.PRIMARY },
+  chipText: { color: C.INK_MUTED, fontSize: 14, fontFamily: FONTS.body },
+  chipTextSelected: { color: '#fff', fontFamily: FONTS.bodyBold },
   button: {
-    backgroundColor: '#f97316', borderRadius: 12,
+    backgroundColor: C.PRIMARY, borderRadius: 12,
     padding: 18, alignItems: 'center', marginTop: 20,
   },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  loadingText: { color: '#fff', fontSize: 15, marginTop: 10 },
-  loadingSubText: { color: 'rgba(255,255,255,0.7)', fontSize: 13, marginTop: 4 },
-  modeDesc: { color: '#64748b', fontSize: 12, marginBottom: 14, marginTop: -6, paddingLeft: 2 },
+  buttonText: { color: '#fff', fontSize: 16, fontFamily: FONTS.bodyBold },
+  loadingText: { color: '#fff', fontSize: 15, fontFamily: FONTS.bodyBold, marginTop: 10 },
+  loadingSubText: { color: 'rgba(255,255,255,0.7)', fontSize: 13, fontFamily: FONTS.body, marginTop: 4 },
+  modeDesc: { color: C.INK_MUTED, fontSize: 12, fontFamily: FONTS.body, marginBottom: 14, marginTop: -6, paddingLeft: 2 },
   multilineInput: { height: 100, textAlignVertical: 'top' },
 });

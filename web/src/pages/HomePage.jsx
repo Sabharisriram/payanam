@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
 import { getTrips, deleteTrip } from '../api/trips';
+import { C } from '../theme/colors';
 
 export default function HomePage() {
   const { user, logout } = useAuthStore();
@@ -77,7 +78,7 @@ export default function HomePage() {
               <div style={styles.cardFooter}>
                 <span style={{
                   ...styles.badge,
-                  backgroundColor: trip.status === 'planned' ? '#166534' : '#1e3a5f'
+                  backgroundColor: trip.status === 'planned' ? C.SAGE_BG : C.CARD_ALT
                 }}>
                   {trip.status}
                 </span>
@@ -97,43 +98,43 @@ export default function HomePage() {
 }
 
 const styles = {
-  container: { minHeight: '100vh', backgroundColor: '#0f172a' },
+  container: { minHeight: '100vh', backgroundColor: C.BG },
   inner: { maxWidth: 700, margin: '0 auto', padding: '20px 16px' },
   header: {
     display: 'flex', justifyContent: 'space-between',
     alignItems: 'center', marginBottom: 24
   },
-  greeting: { fontSize: 22, fontWeight: 'bold', color: '#fff' },
-  subtitle: { color: '#94a3b8', marginTop: 4 },
+  greeting: { fontSize: 22, fontWeight: 'bold', color: C.INK },
+  subtitle: { color: C.INK_MUTED, marginTop: 4 },
   logoutBtn: {
-    backgroundColor: 'transparent', color: '#f97316',
+    backgroundColor: 'transparent', color: C.PRIMARY,
     fontSize: 14, padding: '8px 16px',
-    border: '1px solid #f97316', borderRadius: 8
+    border: `1px solid ${C.PRIMARY}`, borderRadius: 8
   },
   planBtn: {
     width: '100%', padding: 16,
-    backgroundColor: '#f97316', color: '#fff',
+    backgroundColor: C.PRIMARY, color: '#fff',
     borderRadius: 12, fontSize: 16,
     fontWeight: 'bold', marginBottom: 24
   },
-  sectionTitle: { color: '#94a3b8', fontSize: 13, marginBottom: 12 },
+  sectionTitle: { color: C.INK_MUTED, fontSize: 13, marginBottom: 12 },
   tripCard: {
-    backgroundColor: '#1e293b', borderRadius: 12,
+    backgroundColor: C.CARD, borderRadius: 12,
     padding: 16, marginBottom: 12, cursor: 'pointer',
-    borderLeft: '3px solid #f97316'
+    borderLeft: `3px solid ${C.PRIMARY}`
   },
-  tripName: { color: '#fff', fontSize: 17, marginBottom: 4 },
-  tripRoute: { color: '#f97316', fontSize: 14, marginBottom: 4 },
-  tripMeta: { color: '#94a3b8', fontSize: 12, marginBottom: 8 },
+  tripName: { color: C.INK, fontSize: 17, marginBottom: 4 },
+  tripRoute: { color: C.ACCENT, fontSize: 14, marginBottom: 4 },
+  tripMeta: { color: C.INK_MUTED, fontSize: 12, marginBottom: 8 },
   cardFooter: { display: 'flex', alignItems: 'center', gap: 10 },
   badge: {
     display: 'inline-block', padding: '3px 10px',
-    borderRadius: 20, color: '#fff', fontSize: 11
+    borderRadius: 20, color: C.INK, fontSize: 11
   },
   deleteBtn: {
     backgroundColor: 'transparent', color: '#ef4444',
     fontSize: 12, border: '1px solid #ef4444',
     borderRadius: 6, padding: '3px 10px', cursor: 'pointer'
   },
-  empty: { color: '#94a3b8', textAlign: 'center', marginTop: 60 }
+  empty: { color: C.INK_MUTED, textAlign: 'center', marginTop: 60 }
 };

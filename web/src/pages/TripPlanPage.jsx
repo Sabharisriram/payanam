@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getTrip, getTripStops, generatePlan } from '../api/trips';
+import { C } from '../theme/colors';
 
 const STOP_ICONS = {
   tea: '☕', breakfast: '🍳', lunch: '🍽️', dinner: '🌙',
@@ -11,8 +12,8 @@ const STOP_ICONS = {
 };
 
 const CATEGORY_COLORS = {
-  budget: '#166534', 'mid-range': '#1e3a5f',
-  average: '#1e3a5f', luxury: '#4c1d95', free: '#334155', moderate: '#1e3a5f'
+  budget: C.SAGE_BG, 'mid-range': C.CARD_ALT,
+  average: C.CARD_ALT, luxury: '#4c1d95', free: C.BORDER, moderate: C.CARD_ALT
 };
 
 // Map icon set serialised into the iframe HTML
@@ -22,6 +23,19 @@ const MAP_ICONS = {
   fuel: '⛽', stay: '🏨', accommodation: '🏨',
   'stay/accommodation': '🏨', activity: '🎯', meal: '🍽️',
 };
+
+// Returns the index of the first stop whose time >= now, or -1 if all passed
+function findNextStopIndex(dayStops) {
+  const now = new Date();
+  const nowMins = now.getHours() * 60 + now.getMinutes();
+  for (let i = 0; i < dayStops.length; i++) {
+    const t = dayStops[i].suggested_time;
+    if (!t) continue;
+    const parts = t.split(':').map(Number);
+    if (parts[0] * 60 + parts[1] >= nowMins) return i;
+  }
+  return -1;
+}
 
 function buildMapHtml(stops) {
   const stopsData = stops
@@ -45,17 +59,17 @@ function buildMapHtml(stops) {
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
-    html,body,#map{width:100%;height:100%;background:#1e293b}
-    .pin{background:#f97316;color:#fff;border-radius:50%;width:28px;height:28px;
+    html,body,#map{width:100%;height:100%;background:#F7F8FC}
+    .pin{background:#2D5BE3;color:#fff;border-radius:50%;width:28px;height:28px;
          display:flex;align-items:center;justify-content:center;
          font-weight:bold;font-size:12px;border:2px solid #fff;
          box-shadow:0 2px 6px rgba(0,0,0,.5);cursor:pointer}
     .leaflet-popup-content-wrapper{border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.2)}
     .leaflet-popup-content{margin:10px 12px}
     .pp{min-width:160px;max-width:210px;font-family:system-ui,sans-serif}
-    .pp-head{font-weight:700;font-size:13px;margin-bottom:4px;color:#0f172a}
-    .pp-place{font-size:11px;color:#475569;margin-bottom:3px;line-height:1.4}
-    .pp-time{font-size:11px;color:#f97316;font-weight:600;margin-bottom:8px}
+    .pp-head{font-weight:700;font-size:13px;margin-bottom:4px;color:#1A1F3A}
+    .pp-place{font-size:11px;color:#6B7699;margin-bottom:3px;line-height:1.4}
+    .pp-time{font-size:11px;color:#E85D3A;font-weight:600;margin-bottom:8px}
     .pp-btn{background:#4285f4;color:#fff;border:none;padding:6px 0;border-radius:6px;
             font-size:11px;cursor:pointer;width:100%;font-weight:600}
     .pp-btn:hover{opacity:.9}
@@ -86,7 +100,7 @@ stops.forEach(function(s){
   var label=s.stop_type.charAt(0).toUpperCase()+s.stop_type.slice(1);
   var popup=
     '<div class="pp">'+
-    '<div class="pp-head">'+ico+' '+label+'</div>'+
+    '<div class="pp-head">'+ico+' '+label+'</div>'+
     '<div class="pp-place">'+placeName+'</div>'+
     '<div class="pp-time">⏰ '+s.suggested_time+'</div>'+
     '<button class="pp-btn" onclick="navHere('+s.lat+','+s.lng+')">🗺️ Navigate Here<\/button>'+
@@ -107,7 +121,7 @@ if(pts.length>=2){
     .then(function(r){return r.json();})
     .then(function(d){
       if(d.routes&&d.routes[0]){
-        L.geoJSON(d.routes[0].geometry,{style:{color:'#f97316',weight:4,opacity:0.85}}).addTo(map);
+        L.geoJSON(d.routes[0].geometry,{style:{color:'#2D5BE3',weight:4,opacity:0.85}}).addTo(map);
       }
     })
     .catch(function(){});
@@ -129,6 +143,35 @@ export default function TripPlanPage() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [showMap, setShowMap] = useState(false);
+
+  // Inject keyframe CSS for the pulsing glow animation
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.id = 'payanam-pulse-anim';
+    style.textContent = `
+      @keyframes pulseGlow {
+        0%, 100% {
+          box-shadow: 0 0 0 0 rgba(232, 112, 58, 0.15);
+          border-color: rgba(232, 112, 58, 0.35);
+        }
+        50% {
+          box-shadow: 0 0 14px 4px rgba(232, 112, 58, 0.35);
+          border-color: rgba(232, 112, 58, 0.95);
+        }
+      }
+      .payanam-stop-next {
+        animation: pulseGlow 1.8s ease-in-out infinite !important;
+        border: 1.5px solid rgba(232, 112, 58, 0.35) !important;
+      }
+    `;
+    if (!document.getElementById('payanam-pulse-anim')) {
+      document.head.appendChild(style);
+    }
+    return () => {
+      const el = document.getElementById('payanam-pulse-anim');
+      if (el) el.remove();
+    };
+  }, []);
 
   useEffect(() => {
     loadData();
@@ -227,14 +270,18 @@ export default function TripPlanPage() {
           </div>
         )}
 
-        {days.map(day => (
-          <div key={day}>
-            <div style={styles.dayHeader}>
-              <span style={styles.dayTitle}>📅 Day {day}</span>
-            </div>
-            {stops
-              .filter(s => (s.day_number || 1) === day)
-              .map((stop, index) => {
+        {days.map(day => {
+          const dayStops = stops.filter(s => (s.day_number || 1) === day);
+          const nextIndex = findNextStopIndex(dayStops);
+          return (
+            <div key={day}>
+              <div style={styles.dayHeader}>
+                <span style={styles.dayTitle}>📅 Day {day}</span>
+              </div>
+
+              {dayStops.map((stop, index) => {
+                const isNext = index === nextIndex;
+                const isLast = index === dayStops.length - 1;
                 const icon = STOP_ICONS[stop.stop_type?.toLowerCase()] || '📍';
                 const notes = stop.notes?.split('|') || [];
                 const location = notes[0]?.trim();
@@ -244,33 +291,51 @@ export default function TripPlanPage() {
                   : 'budget';
 
                 return (
-                  <div key={stop.id || index} style={styles.stopCard}>
-                    <div style={styles.stopHeader}>
-                      <div style={styles.timeBox}>
-                        <span style={styles.icon}>{icon}</span>
-                        <span style={styles.time}>{stop.suggested_time?.slice(0, 5)}</span>
-                      </div>
-                      <div style={styles.stopInfo}>
-                        <p style={styles.stopType}>
-                          {stop.stop_type?.charAt(0).toUpperCase() + stop.stop_type?.slice(1)}
-                        </p>
-                        <p style={styles.stopLocation}>{location}</p>
-                      </div>
-                      <span style={{
-                        ...styles.badge,
-                        backgroundColor: CATEGORY_COLORS[category] || '#334155'
-                      }}>
-                        {category}
-                      </span>
+                  <div key={stop.id || index} style={styles.stopWrapper}>
+
+                    {/* Timeline column: dot + dashed connecting line */}
+                    <div style={styles.timelineCol}>
+                      <div style={{
+                        ...styles.timelineDot,
+                        ...(isNext ? styles.timelineDotNext : {}),
+                      }} />
+                      {!isLast && <div style={styles.timelineLine} />}
                     </div>
-                    {description && (
-                      <p style={styles.description}>{description}</p>
-                    )}
+
+                    {/* Card */}
+                    <div
+                      style={styles.stopCard}
+                      className={isNext ? 'payanam-stop-next' : ''}
+                    >
+                      <div style={styles.stopHeader}>
+                        <div style={styles.timeBox}>
+                          <span style={styles.icon}>{icon}</span>
+                          <span style={styles.time}>{stop.suggested_time?.slice(0, 5)}</span>
+                        </div>
+                        <div style={styles.stopInfo}>
+                          <p style={styles.stopType}>
+                            {stop.stop_type?.charAt(0).toUpperCase() + stop.stop_type?.slice(1)}
+                          </p>
+                          <p style={styles.stopLocation}>{location}</p>
+                        </div>
+                        <span style={{
+                          ...styles.badge,
+                          backgroundColor: CATEGORY_COLORS[category] || C.BORDER
+                        }}>
+                          {category}
+                        </span>
+                      </div>
+                      {description && (
+                        <p style={styles.description}>{description}</p>
+                      )}
+                    </div>
+
                   </div>
                 );
               })}
-          </div>
-        ))}
+            </div>
+          );
+        })}
 
         {showMap && hasCoords && (
           <div style={styles.mapContainer}>
@@ -289,73 +354,118 @@ export default function TripPlanPage() {
 }
 
 const styles = {
-  container: { minHeight: '100vh', backgroundColor: '#0f172a' },
+  container: { minHeight: '100vh', backgroundColor: C.BG },
   inner: { maxWidth: 700, margin: '0 auto', padding: '20px 16px 60px' },
   loadingContainer: {
     minHeight: '100vh', display: 'flex',
-    alignItems: 'center', justifyContent: 'center'
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: C.BG
   },
-  loadingText: { color: '#fff', fontSize: 18 },
+  loadingText: { color: C.INK, fontSize: 18 },
   back: {
     backgroundColor: 'transparent', border: 'none',
-    color: '#f97316', fontSize: 16, marginBottom: 16, cursor: 'pointer', padding: 0,
+    color: C.PRIMARY, fontSize: 16, marginBottom: 16, cursor: 'pointer', padding: 0,
   },
   tripHeader: {
-    backgroundColor: '#1e293b', borderRadius: 12,
+    backgroundColor: C.CARD, borderRadius: 12,
     padding: 16, marginBottom: 20
   },
-  tripName: { color: '#fff', fontSize: 22, fontWeight: 'bold', marginBottom: 4 },
-  tripRoute: { color: '#f97316', fontSize: 15, marginBottom: 4 },
-  tripMeta: { color: '#94a3b8', fontSize: 13 },
+  tripName: { color: C.INK, fontSize: 22, fontWeight: 'bold', marginBottom: 4 },
+  tripRoute: { color: C.ACCENT, fontSize: 15, marginBottom: 4 },
+  tripMeta: { color: C.INK_MUTED, fontSize: 13 },
   planRow: {
     display: 'flex', alignItems: 'center',
     justifyContent: 'space-between', marginBottom: 16,
   },
-  sectionTitle: { color: '#94a3b8', fontSize: 13, margin: 0 },
+  sectionTitle: { color: C.INK_MUTED, fontSize: 13, margin: 0 },
   mapBtn: {
-    backgroundColor: '#1e3a5f', color: '#fff',
+    backgroundColor: C.CARD_ALT, color: C.INK,
     padding: '6px 14px', borderRadius: 8,
     fontSize: 13, fontWeight: 'bold',
-    border: '1px solid #f97316', cursor: 'pointer',
+    border: `1px solid ${C.PRIMARY}`, cursor: 'pointer',
   },
   mapBtnActive: {
-    backgroundColor: '#1e293b', color: '#64748b',
+    backgroundColor: C.CARD, color: C.INK_MUTED,
     padding: '6px 14px', borderRadius: 8,
     fontSize: 13, fontWeight: 'bold',
-    border: '1px solid #334155', cursor: 'pointer',
+    border: `1px solid ${C.BORDER}`, cursor: 'pointer',
   },
   emptyPlan: { textAlign: 'center', marginTop: 60 },
-  emptyText: { color: '#94a3b8', marginBottom: 16 },
+  emptyText: { color: C.INK_MUTED, marginBottom: 16 },
   generateBtn: {
-    backgroundColor: '#f97316', color: '#fff',
+    backgroundColor: C.PRIMARY, color: '#fff',
     padding: '12px 24px', borderRadius: 10,
     fontSize: 15, fontWeight: 'bold', border: 'none', cursor: 'pointer',
   },
   dayHeader: {
-    backgroundColor: '#1e3a5f', borderRadius: 8,
+    backgroundColor: C.CARD_ALT, borderRadius: 8,
     padding: '10px 14px', marginBottom: 8, marginTop: 16
   },
-  dayTitle: { color: '#f97316', fontSize: 15, fontWeight: 'bold' },
+  dayTitle: { color: C.ACCENT, fontSize: 15, fontWeight: 'bold' },
+
+  // ── Timeline row ──────────────────────────────────────────────────────────
+  stopWrapper: {
+    display: 'flex',
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    marginBottom: 12,
+  },
+  timelineCol: {
+    width: 22,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    paddingTop: 16,
+    flexShrink: 0,
+  },
+  timelineDot: {
+    width: 10, height: 10, borderRadius: '50%',
+    backgroundColor: C.PRIMARY,
+    opacity: 0.55,
+    flexShrink: 0,
+  },
+  timelineDotNext: {
+    width: 14, height: 14,
+    opacity: 1,
+    boxShadow: `0 0 8px 3px ${C.PRIMARY}`,
+  },
+  timelineLine: {
+    flexGrow: 1,
+    width: 2,
+    marginTop: 5,
+    background: `repeating-linear-gradient(
+      to bottom,
+      ${C.PRIMARY} 0px,
+      ${C.PRIMARY} 5px,
+      transparent 5px,
+      transparent 10px
+    )`,
+    opacity: 0.4,
+  },
+
+  // ── Stop card ─────────────────────────────────────────────────────────────
   stopCard: {
-    backgroundColor: '#1e293b', borderRadius: 12,
-    padding: 14, marginBottom: 12,
-    borderLeft: '3px solid #f97316'
+    flex: 1,
+    backgroundColor: C.CARD, borderRadius: 12,
+    padding: 14,
+    marginLeft: 8,
+    border: '1.5px solid transparent',
   },
   stopHeader: { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 },
   timeBox: { display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 44 },
   icon: { fontSize: 20 },
-  time: { color: '#f97316', fontSize: 12, fontWeight: 'bold', marginTop: 2 },
+  time: { color: C.ACCENT, fontSize: 12, fontWeight: 'bold', marginTop: 2 },
   stopInfo: { flex: 1 },
-  stopType: { color: '#fff', fontSize: 15, fontWeight: 'bold', margin: 0 },
-  stopLocation: { color: '#94a3b8', fontSize: 12, marginTop: 2, margin: 0 },
+  stopType: { color: C.INK, fontSize: 15, fontWeight: 'bold', margin: 0 },
+  stopLocation: { color: C.INK_MUTED, fontSize: 12, marginTop: 2, margin: 0 },
   badge: {
     padding: '3px 10px', borderRadius: 20,
-    color: '#fff', fontSize: 11, whiteSpace: 'nowrap'
+    color: C.INK, fontSize: 11, whiteSpace: 'nowrap'
   },
-  description: { color: '#cbd5e1', fontSize: 13, lineHeight: 1.6, margin: 0 },
+  description: { color: C.INK_MUTED, fontSize: 13, lineHeight: 1.6, margin: 0 },
   mapContainer: {
     marginTop: 28, borderRadius: 12, overflow: 'hidden',
-    border: '1px solid #334155', height: 500,
+    border: `1px solid ${C.BORDER}`, height: 500,
   },
   mapFrame: { width: '100%', height: '100%', border: 'none', display: 'block' },
 };

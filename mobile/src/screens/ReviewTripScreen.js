@@ -4,6 +4,7 @@ import {
   TouchableOpacity, SafeAreaView, Alert, TextInput
 } from 'react-native';
 import { getTripStops, submitReview, completeTrip } from '../api/trips';
+import { C } from '../theme/colors';
 
 const StarRating = ({ value, onChange, label }) => {
   return (
@@ -179,7 +180,7 @@ export default function ReviewTripScreen({ route, navigation }) {
           <TextInput
             style={styles.commentInput}
             placeholder="Share your experience..."
-            placeholderTextColor="#475569"
+            placeholderTextColor={C.INK_MUTED}
             multiline
             value={review.comment || ''}
             onChangeText={(v) => updateReview(stop.id, 'comment', v)}
@@ -206,54 +207,54 @@ export default function ReviewTripScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
+  container: { flex: 1, backgroundColor: C.BG },
   inner: { padding: 20, paddingBottom: 40 },
-  loading: { color: '#fff', textAlign: 'center', marginTop: 40 },
-  title: { color: '#fff', fontSize: 24, fontWeight: 'bold', marginBottom: 4 },
-  tripName: { color: '#f97316', fontSize: 14, marginBottom: 8 },
-  progress: { color: '#94a3b8', fontSize: 13, marginBottom: 8 },
+  loading: { color: C.INK, textAlign: 'center', marginTop: 40 },
+  title: { color: C.INK, fontSize: 24, fontWeight: 'bold', marginBottom: 4 },
+  tripName: { color: C.ACCENT, fontSize: 14, marginBottom: 8 },
+  progress: { color: C.INK_MUTED, fontSize: 13, marginBottom: 8 },
   progressBar: {
-    height: 4, backgroundColor: '#1e293b',
+    height: 4, backgroundColor: C.CARD,
     borderRadius: 2, marginBottom: 20
   },
   progressFill: {
-    height: 4, backgroundColor: '#f97316', borderRadius: 2
+    height: 4, backgroundColor: C.PRIMARY, borderRadius: 2
   },
   emptyCard: {
-    backgroundColor: '#1e293b', borderRadius: 12,
+    backgroundColor: C.CARD, borderRadius: 12,
     padding: 32, alignItems: 'center', marginTop: 32, marginBottom: 24
   },
   emptyIcon: { fontSize: 48, marginBottom: 12 },
-  emptyText: { color: '#94a3b8', fontSize: 15, textAlign: 'center' },
+  emptyText: { color: C.INK_MUTED, fontSize: 15, textAlign: 'center' },
   stopCard: {
-    backgroundColor: '#1e293b', borderRadius: 12,
+    backgroundColor: C.CARD, borderRadius: 12,
     padding: 16, marginBottom: 16,
-    borderLeftWidth: 3, borderLeftColor: '#f97316'
+    borderLeftWidth: 3, borderLeftColor: C.PRIMARY
   },
-  stopType: { color: '#fff', fontSize: 18, fontWeight: 'bold', marginBottom: 4 },
-  stopTime: { color: '#f97316', fontSize: 13, marginBottom: 4 },
-  stopNotes: { color: '#94a3b8', fontSize: 13 },
+  stopType: { color: C.INK, fontSize: 18, fontWeight: 'bold', marginBottom: 4 },
+  stopTime: { color: C.ACCENT, fontSize: 13, marginBottom: 4 },
+  stopNotes: { color: C.INK_MUTED, fontSize: 13 },
   reviewCard: {
-    backgroundColor: '#1e293b', borderRadius: 12,
+    backgroundColor: C.CARD, borderRadius: 12,
     padding: 16, marginBottom: 16
   },
   starContainer: { marginBottom: 16 },
-  starLabel: { color: '#94a3b8', fontSize: 13, marginBottom: 8 },
+  starLabel: { color: C.INK_MUTED, fontSize: 13, marginBottom: 8 },
   stars: { flexDirection: 'row', gap: 8 },
-  star: { fontSize: 32, color: '#334155' },
-  starActive: { color: '#f97316' },
-  commentLabel: { color: '#94a3b8', fontSize: 13, marginBottom: 8 },
+  star: { fontSize: 32, color: C.INK_MUTED },
+  starActive: { color: C.PRIMARY },
+  commentLabel: { color: C.INK_MUTED, fontSize: 13, marginBottom: 8 },
   commentInput: {
-    backgroundColor: '#0f172a', color: '#fff',
+    backgroundColor: C.BG, color: C.INK,
     borderRadius: 8, padding: 12, fontSize: 14,
-    borderWidth: 1, borderColor: '#334155',
+    borderWidth: 1, borderColor: C.BORDER,
     minHeight: 80, textAlignVertical: 'top'
   },
   nextButton: {
-    backgroundColor: '#f97316', borderRadius: 12,
+    backgroundColor: C.PRIMARY, borderRadius: 12,
     padding: 16, alignItems: 'center', marginBottom: 12
   },
   nextButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
   skipButton: { alignItems: 'center', padding: 12 },
-  skipButtonText: { color: '#94a3b8', fontSize: 14 }
+  skipButtonText: { color: C.INK_MUTED, fontSize: 14 }
 });

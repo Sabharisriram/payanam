@@ -4,6 +4,7 @@ import {
   StyleSheet, Alert, ActivityIndicator, KeyboardAvoidingView, Platform
 } from 'react-native';
 import useAuthStore from '../store/authStore';
+import { C } from '../theme/colors';
 
 export default function LoginScreen({ navigation }) {
   const [phone, setPhone] = useState('');
@@ -33,7 +34,7 @@ export default function LoginScreen({ navigation }) {
         <TextInput
           style={styles.input}
           placeholder="Phone Number"
-          placeholderTextColor="#888"
+          placeholderTextColor={C.INK_MUTED}
           keyboardType="phone-pad"
           value={phone}
           onChangeText={setPhone}
@@ -42,7 +43,7 @@ export default function LoginScreen({ navigation }) {
         <TextInput
           style={styles.input}
           placeholder="Password"
-          placeholderTextColor="#888"
+          placeholderTextColor={C.INK_MUTED}
           secureTextEntry
           value={password}
           onChangeText={setPassword}
@@ -69,19 +70,19 @@ export default function LoginScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
+  container: { flex: 1, backgroundColor: C.BG },
   inner: { flex: 1, justifyContent: 'center', paddingHorizontal: 28 },
-  logo: { fontSize: 42, fontWeight: 'bold', color: '#f97316', textAlign: 'center', marginBottom: 6 },
-  tagline: { fontSize: 14, color: '#94a3b8', textAlign: 'center', marginBottom: 40 },
+  logo: { fontSize: 42, fontWeight: 'bold', color: C.PRIMARY, textAlign: 'center', marginBottom: 6 },
+  tagline: { fontSize: 14, color: C.INK_MUTED, textAlign: 'center', marginBottom: 40 },
   input: {
-    backgroundColor: '#1e293b', color: '#fff', borderRadius: 10,
-    padding: 14, marginBottom: 14, fontSize: 16, borderWidth: 1, borderColor: '#334155'
+    backgroundColor: C.CARD, color: C.INK, borderRadius: 10,
+    padding: 14, marginBottom: 14, fontSize: 16, borderWidth: 1, borderColor: C.BORDER
   },
   button: {
-    backgroundColor: '#f97316', borderRadius: 10,
+    backgroundColor: C.PRIMARY, borderRadius: 10,
     padding: 16, alignItems: 'center', marginTop: 6
   },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  link: { color: '#f97316', textAlign: 'center', marginTop: 20, fontSize: 14 },
+  link: { color: C.PRIMARY, textAlign: 'center', marginTop: 20, fontSize: 14 },
   error: { color: '#ef4444', textAlign: 'center', marginBottom: 14 }
 });

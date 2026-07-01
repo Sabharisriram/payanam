@@ -4,6 +4,7 @@ import {
   Linking, SafeAreaView, ActivityIndicator,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
+import { C } from '../theme/colors';
 
 const STOP_ICONS = {
   tea: '☕', breakfast: '🍳', lunch: '🍽️', dinner: '🌙',
@@ -31,19 +32,19 @@ function buildMapHtml(stops) {
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
-    body{background:#0f172a}
+    body{background:#F7F8FC}
     #map{width:100vw;height:100vh}
-    #loading{position:fixed;top:0;left:0;right:0;bottom:0;background:#0f172a;display:flex;align-items:center;justify-content:center;z-index:9999;flex-direction:column;gap:12px}
-    #loading p{color:#94a3b8;font-family:sans-serif;font-size:14px}
-    #spinner{width:32px;height:32px;border:3px solid #334155;border-top-color:#f97316;border-radius:50%;animation:spin .8s linear infinite}
+    #loading{position:fixed;top:0;left:0;right:0;bottom:0;background:#F7F8FC;display:flex;align-items:center;justify-content:center;z-index:9999;flex-direction:column;gap:12px}
+    #loading p{color:#6B7699;font-family:sans-serif;font-size:14px}
+    #spinner{width:32px;height:32px;border:3px solid #DDE3F0;border-top-color:#2D5BE3;border-radius:50%;animation:spin .8s linear infinite}
     @keyframes spin{to{transform:rotate(360deg)}}
-    .pin{background:#f97316;color:#fff;border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:13px;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.5);cursor:pointer}
+    .pin{background:#2D5BE3;color:#fff;border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:13px;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.5);cursor:pointer}
     .leaflet-popup-content-wrapper{border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,.2)}
     .leaflet-popup-content{margin:12px 14px}
     .pp{font-family:-apple-system,sans-serif;min-width:170px;max-width:220px}
-    .pp-head{font-weight:700;font-size:14px;margin-bottom:5px;color:#0f172a}
-    .pp-place{font-size:12px;color:#475569;margin-bottom:4px;line-height:1.5}
-    .pp-time{font-size:12px;color:#f97316;font-weight:600;margin-bottom:10px}
+    .pp-head{font-weight:700;font-size:14px;margin-bottom:5px;color:#1A1F3A}
+    .pp-place{font-size:12px;color:#6B7699;margin-bottom:4px;line-height:1.5}
+    .pp-time{font-size:12px;color:#E85D3A;font-weight:600;margin-bottom:10px}
     .pp-btn{background:#4285f4;color:#fff;border:none;padding:7px 0;border-radius:7px;font-size:12px;cursor:pointer;width:100%;font-weight:600}
     .pp-btn:active{opacity:.85}
   </style>
@@ -113,7 +114,7 @@ window.addEventListener('load', function() {
       .then(function(data) {
         if (data.routes && data.routes[0]) {
           L.geoJSON(data.routes[0].geometry, {
-            style: {color: '#f97316', weight: 4, opacity: 0.85}
+            style: {color: '#2D5BE3', weight: 4, opacity: 0.85}
           }).addTo(map);
         }
       })
@@ -196,7 +197,7 @@ export default function MapScreen({ route, navigation }) {
           startInLoadingState
           renderLoading={() => (
             <View style={styles.loadingOverlay}>
-              <ActivityIndicator color="#f97316" size="large" />
+              <ActivityIndicator color={C.PRIMARY} size="large" />
             </View>
           )}
         />
@@ -231,39 +232,39 @@ export default function MapScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
+  container: { flex: 1, backgroundColor: C.BG },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
+    borderBottomColor: C.BORDER,
     gap: 12,
   },
-  back: { color: '#f97316', fontSize: 16 },
-  title: { flex: 1, color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  back: { color: C.PRIMARY, fontSize: 16 },
+  title: { flex: 1, color: C.INK, fontSize: 16, fontWeight: 'bold' },
   map: { flex: 1 },
   loadingOverlay: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
     justifyContent: 'center', alignItems: 'center',
-    backgroundColor: '#0f172a',
+    backgroundColor: C.BG,
   },
   emptyContainer: {
     flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40,
   },
   emptyIcon: { fontSize: 48, marginBottom: 16 },
-  emptyTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold', marginBottom: 8 },
-  emptyDesc: { color: '#64748b', fontSize: 14, textAlign: 'center', lineHeight: 22 },
+  emptyTitle: { color: C.INK, fontSize: 18, fontWeight: 'bold', marginBottom: 8 },
+  emptyDesc: { color: C.INK_MUTED, fontSize: 14, textAlign: 'center', lineHeight: 22 },
   mapsBtn: {
-    backgroundColor: '#1e3a5f',
+    backgroundColor: C.CARD_ALT,
     margin: 12,
     borderRadius: 12,
     padding: 14,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#f97316',
+    borderColor: C.PRIMARY,
   },
   mapsBtnDisabled: { opacity: 0.4 },
-  mapsBtnText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
+  mapsBtnText: { color: C.INK, fontSize: 14, fontWeight: 'bold' },
 });

@@ -1,23 +1,45 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  FlatList, ActivityIndicator, SafeAreaView, Alert
+  FlatList, ActivityIndicator, Alert, Animated
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import useAuthStore from '../store/authStore';
 import { getTrips, deleteTrip } from '../api/trips';
+import { C, FONTS, SHADOWS } from '../theme/colors';
 
 export default function HomeScreen({ navigation }) {
   const { user, logout } = useAuthStore();
   const [trips, setTrips] = useState([]);
   const [loading, setLoading] = useState(true);
+  const cardAnims = useRef([]);
 
   useEffect(() => {
     loadTrips();
   }, []);
 
+  useEffect(() => {
+    if (trips.length > 0 && cardAnims.current.length === trips.length) {
+      trips.forEach((_, i) => {
+        Animated.parallel([
+          Animated.timing(cardAnims.current[i].opacity, {
+            toValue: 1, duration: 320, delay: i * 50, useNativeDriver: true,
+          }),
+          Animated.timing(cardAnims.current[i].translateY, {
+            toValue: 0, duration: 320, delay: i * 50, useNativeDriver: true,
+          }),
+        ]).start();
+      });
+    }
+  }, [trips]);
+
   const loadTrips = async () => {
     try {
       const data = await getTrips();
+      cardAnims.current = data.map(() => ({
+        opacity: new Animated.Value(0),
+        translateY: new Animated.Value(24),
+      }));
       setTrips(data);
     } catch (err) {
       console.error(err);
@@ -48,33 +70,40 @@ export default function HomeScreen({ navigation }) {
     );
   };
 
-  const renderTrip = ({ item }) => (
-    <TouchableOpacity
-      style={styles.tripCard}
-      onPress={() => navigation.navigate('TripPlan', { tripId: item.id })}
-    >
-      <Text style={styles.tripName}>{item.trip_name}</Text>
-      <Text style={styles.tripDetail}>
-        {item.start_location} → {item.end_location}
-      </Text>
-      <Text style={styles.tripMeta}>
-        {item.trip_type} · {item.vehicle_type} · {item.member_count} members
-      </Text>
-      <View style={styles.cardFooter}>
-        <View style={[styles.badge,
-          item.status === 'planned' ? styles.badgePlanned : styles.badgePending
-        ]}>
-          <Text style={styles.badgeText}>{item.status}</Text>
-        </View>
+  const renderTrip = ({ item, index }) => {
+    const anim = cardAnims.current[index];
+    return (
+      <Animated.View
+        style={anim ? { opacity: anim.opacity, transform: [{ translateY: anim.translateY }] } : null}
+      >
         <TouchableOpacity
-          onPress={() => handleDelete(item.id)}
-          style={styles.deleteBtn}
+          style={styles.tripCard}
+          onPress={() => navigation.navigate('TripPlan', { tripId: item.id })}
         >
-          <Text style={styles.deleteBtnText}>Delete</Text>
+          <Text style={styles.tripName}>{item.trip_name}</Text>
+          <Text style={styles.tripDetail}>
+            {item.start_location} → {item.end_location}
+          </Text>
+          <Text style={styles.tripMeta}>
+            {item.trip_type} · {item.vehicle_type} · {item.member_count} members
+          </Text>
+          <View style={styles.cardFooter}>
+            <View style={[styles.badge,
+              item.status === 'planned' ? styles.badgePlanned : styles.badgePending
+            ]}>
+              <Text style={styles.badgeText}>{item.status}</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => handleDelete(item.id)}
+              style={styles.deleteBtn}
+            >
+              <Text style={styles.deleteBtnText}>Delete</Text>
+            </TouchableOpacity>
+          </View>
         </TouchableOpacity>
-      </View>
-    </TouchableOpacity>
-  );
+      </Animated.View>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -99,7 +128,7 @@ export default function HomeScreen({ navigation }) {
       <Text style={styles.sectionTitle}>Your Trips</Text>
 
       {loading ? (
-        <ActivityIndicator color="#f97316" style={{ marginTop: 40 }} />
+        <ActivityIndicator color={C.PRIMARY} style={{ marginTop: 40 }} />
       ) : trips.length === 0 ? (
         <Text style={styles.empty}>No trips yet. Plan your first trip!</Text>
       ) : (
@@ -116,36 +145,40 @@ export default function HomeScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
+  container: { flex: 1, backgroundColor: C.BG },
   header: {
     flexDirection: 'row', justifyContent: 'space-between',
     alignItems: 'center', padding: 20, paddingTop: 10
   },
-  greeting: { fontSize: 20, fontWeight: 'bold', color: '#fff' },
-  subtitle: { fontSize: 13, color: '#94a3b8', marginTop: 2 },
-  logout: { color: '#f97316', fontSize: 14 },
+  // Tamil text mixed in — use bodyBold to avoid per-glyph font switching
+  greeting: { fontSize: 20, fontFamily: FONTS.bodyBold, color: C.INK },
+  subtitle: { fontSize: 13, fontFamily: FONTS.body, color: C.INK_MUTED, marginTop: 2 },
+  logout: { color: C.PRIMARY, fontSize: 14, fontFamily: FONTS.body },
   planButton: {
-    backgroundColor: '#f97316', margin: 20, borderRadius: 12,
+    backgroundColor: C.PRIMARY, margin: 20, borderRadius: 12,
     padding: 16, alignItems: 'center'
   },
-  planButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  sectionTitle: { color: '#94a3b8', fontSize: 13, marginLeft: 20, marginBottom: 10 },
+  planButtonText: { color: '#fff', fontSize: 16, fontFamily: FONTS.bodyBold },
+  sectionTitle: { color: C.INK_MUTED, fontSize: 13, fontFamily: FONTS.body, marginLeft: 20, marginBottom: 10 },
   tripCard: {
-    backgroundColor: '#1e293b', marginHorizontal: 20,
-    marginBottom: 12, borderRadius: 12, padding: 16
+    backgroundColor: C.CARD, marginHorizontal: 20,
+    marginBottom: 14, borderRadius: 12, padding: 18,
+    borderWidth: 1,
+    borderColor: C.BORDER,
+    ...SHADOWS.sm,
   },
-  tripName: { color: '#fff', fontSize: 16, fontWeight: 'bold', marginBottom: 4 },
-  tripDetail: { color: '#f97316', fontSize: 14, marginBottom: 4 },
-  tripMeta: { color: '#94a3b8', fontSize: 12, marginBottom: 8 },
+  tripName: { color: C.INK, fontSize: 16, fontFamily: FONTS.bodyBold, marginBottom: 4 },
+  tripDetail: { color: C.PRIMARY, fontSize: 14, fontFamily: FONTS.body, marginBottom: 4 },
+  tripMeta: { color: C.INK_MUTED, fontSize: 12, fontFamily: FONTS.body, marginBottom: 8 },
   cardFooter: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   badge: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 20 },
-  badgePlanned: { backgroundColor: '#166534' },
-  badgePending: { backgroundColor: '#1e3a5f' },
-  badgeText: { color: '#fff', fontSize: 11 },
+  badgePlanned: { backgroundColor: C.SAGE_BG },
+  badgePending: { backgroundColor: C.CARD_ALT },
+  badgeText: { color: C.INK, fontSize: 11, fontFamily: FONTS.body },
   deleteBtn: {
     borderWidth: 1, borderColor: '#ef4444',
     borderRadius: 6, paddingHorizontal: 10, paddingVertical: 3
   },
-  deleteBtnText: { color: '#ef4444', fontSize: 12 },
-  empty: { color: '#94a3b8', textAlign: 'center', marginTop: 60, fontSize: 15 }
+  deleteBtnText: { color: '#ef4444', fontSize: 12, fontFamily: FONTS.body },
+  empty: { color: C.INK_MUTED, textAlign: 'center', marginTop: 60, fontSize: 15, fontFamily: FONTS.body }
 });

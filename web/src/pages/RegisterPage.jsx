@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
+import { C } from '../theme/colors';
 
 export default function RegisterPage() {
   const [name, setName] = useState('');
@@ -71,28 +72,28 @@ const styles = {
   container: {
     minHeight: '100vh', display: 'flex',
     alignItems: 'center', justifyContent: 'center',
-    backgroundColor: '#0f172a'
+    backgroundColor: C.BG
   },
   card: {
     width: '100%', maxWidth: 420,
-    padding: 40, backgroundColor: '#1e293b',
+    padding: 40, backgroundColor: C.CARD,
     borderRadius: 16
   },
-  logo: { fontSize: 42, color: '#f97316', textAlign: 'center', marginBottom: 8 },
-  tagline: { color: '#94a3b8', textAlign: 'center', marginBottom: 32 },
+  logo: { fontSize: 42, color: C.PRIMARY, textAlign: 'center', marginBottom: 8 },
+  tagline: { color: C.INK_MUTED, textAlign: 'center', marginBottom: 32 },
   input: {
     width: '100%', padding: '14px 16px',
-    backgroundColor: '#0f172a', border: '1px solid #334155',
-    borderRadius: 10, color: '#fff', fontSize: 15,
+    backgroundColor: C.BG, border: `1px solid ${C.BORDER}`,
+    borderRadius: 10, color: C.INK, fontSize: 15,
     marginBottom: 14, display: 'block'
   },
   button: {
     width: '100%', padding: 16,
-    backgroundColor: '#f97316', color: '#fff',
+    backgroundColor: C.PRIMARY, color: '#fff',
     borderRadius: 10, fontSize: 16,
     fontWeight: 'bold', marginTop: 8
   },
-  link: { color: '#94a3b8', textAlign: 'center', marginTop: 20 },
-  linkText: { color: '#f97316' },
+  link: { color: C.INK_MUTED, textAlign: 'center', marginTop: 20 },
+  linkText: { color: C.PRIMARY },
   error: { color: '#ef4444', textAlign: 'center', marginBottom: 16 }
 };

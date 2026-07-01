@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, TouchableOpacity,
   Animated, Modal
 } from 'react-native';
+import { C, SHADOWS } from '../theme/colors';
 
 const STOP_ICONS = {
   tea: '☕', breakfast: '🍳', lunch: '🍽️', dinner: '🌙',
@@ -17,16 +18,21 @@ export default function QuickReviewSheet({ stop, visible, onRate, onSkip }) {
   const slideAnim = useRef(new Animated.Value(350)).current;
   const [countdown, setCountdown] = useState(AUTO_DISMISS_SECS);
   const countdownRef = useRef(null);
+  // One scale Animated.Value per star, reset when sheet opens
+  const starAnims = useRef([1, 2, 3, 4, 5].map(() => new Animated.Value(1))).current;
 
   useEffect(() => {
     if (visible) {
       setCountdown(AUTO_DISMISS_SECS);
+      // Reset star scales
+      starAnims.forEach(a => a.setValue(1));
 
+      // Snappy spring slide-up
       Animated.spring(slideAnim, {
         toValue: 0,
         useNativeDriver: true,
-        tension: 80,
-        friction: 10,
+        tension: 200,
+        friction: 16,
       }).start();
 
       countdownRef.current = setInterval(() => {
@@ -50,6 +56,14 @@ export default function QuickReviewSheet({ stop, visible, onRate, onSkip }) {
 
     return () => clearInterval(countdownRef.current);
   }, [visible]);
+
+  const handleStarPress = (star, index) => {
+    Animated.sequence([
+      Animated.timing(starAnims[index], { toValue: 1.4, duration: 80, useNativeDriver: true }),
+      Animated.spring(starAnims[index], { toValue: 1.0, useNativeDriver: true, tension: 350, friction: 10 }),
+    ]).start();
+    onRate(star);
+  };
 
   if (!stop) return null;
 
@@ -87,16 +101,20 @@ export default function QuickReviewSheet({ stop, visible, onRate, onSkip }) {
 
           <Text style={styles.prompt}>How was this stop?</Text>
 
-          {/* Star rating */}
+          {/* Star rating with scale-pop animation */}
           <View style={styles.starsRow}>
-            {[1, 2, 3, 4, 5].map(star => (
+            {[1, 2, 3, 4, 5].map((star, i) => (
               <TouchableOpacity
                 key={star}
-                onPress={() => onRate(star)}
+                onPress={() => handleStarPress(star, i)}
                 style={styles.starBtn}
                 activeOpacity={0.7}
               >
-                <Text style={styles.starText}>★</Text>
+                <Animated.Text
+                  style={[styles.starText, { transform: [{ scale: starAnims[i] }] }]}
+                >
+                  ★
+                </Animated.Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -124,16 +142,17 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: '#1e293b',
+    backgroundColor: C.CARD,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingHorizontal: 24,
     paddingTop: 12,
     paddingBottom: 40,
+    ...SHADOWS.lg,
   },
   handle: {
     width: 40, height: 4,
-    backgroundColor: '#475569',
+    backgroundColor: C.BORDER,
     borderRadius: 2,
     alignSelf: 'center',
     marginBottom: 20,
@@ -146,12 +165,12 @@ const styles = StyleSheet.create({
   },
   stopIcon: { fontSize: 32 },
   stopInfo: { flex: 1 },
-  stopLabel: { color: '#fff', fontSize: 17, fontWeight: 'bold' },
-  placeName: { color: '#94a3b8', fontSize: 13, marginTop: 2 },
-  stopTime: { color: '#f97316', fontSize: 12, marginTop: 2 },
-  countdown: { color: '#475569', fontSize: 13, fontWeight: 'bold' },
+  stopLabel: { color: C.INK, fontSize: 17, fontWeight: 'bold' },
+  placeName: { color: C.INK_MUTED, fontSize: 13, marginTop: 2 },
+  stopTime: { color: C.ACCENT, fontSize: 12, marginTop: 2 },
+  countdown: { color: C.INK_MUTED, fontSize: 13, fontWeight: 'bold' },
   prompt: {
-    color: '#cbd5e1',
+    color: C.INK_MUTED,
     fontSize: 15,
     marginBottom: 16,
     textAlign: 'center',
@@ -163,22 +182,22 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   starBtn: { padding: 4 },
-  starText: { fontSize: 40, color: '#f97316' },
+  starText: { fontSize: 40, color: C.PRIMARY },
   timerTrack: {
     height: 3,
-    backgroundColor: '#334155',
+    backgroundColor: C.BORDER,
     borderRadius: 2,
     marginBottom: 16,
     overflow: 'hidden',
   },
   timerFill: {
     height: 3,
-    backgroundColor: '#f97316',
+    backgroundColor: C.PRIMARY,
     borderRadius: 2,
   },
   skipBtn: {
     alignItems: 'center',
     paddingVertical: 8,
   },
-  skipText: { color: '#64748b', fontSize: 14 },
+  skipText: { color: C.INK_MUTED, fontSize: 14 },
 });

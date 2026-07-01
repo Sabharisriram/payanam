@@ -1,44 +1,63 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  ActivityIndicator, SafeAreaView, TouchableOpacity
+  ActivityIndicator, SafeAreaView, TouchableOpacity, Animated
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import * as Speech from 'expo-speech';
 import * as Location from 'expo-location';
+import {
+  Coffee, UtensilsCrossed, Moon, Camera, Mountain,
+  Fuel, Hotel, Sparkles, MapPin,
+} from 'lucide-react-native';
 import { getTrip, getTripStops, voiceCommand, updateStopByType } from '../api/trips';
+import { C, FONTS, SHADOWS } from '../theme/colors';
 
-const STOP_ICONS = {
-  tea: '☕',
-  breakfast: '🍳',
-  lunch: '🍽️',
-  dinner: '🌙',
-  sightseeing: '📸',
-  viewpoint: '🏔️',
-  fuel: '⛽',
-  accommodation: '🏨',
-  stay: '🏨',
-  'stay/accommodation': '🏨',
-  activity: '🎯',
-  meal: '🍽️',
-  snack: '🥤',
+const STOP_ICON_COMPONENTS = {
+  tea: Coffee, snack: Coffee,
+  breakfast: UtensilsCrossed, lunch: UtensilsCrossed,
+  meal: UtensilsCrossed, food: UtensilsCrossed, break: UtensilsCrossed,
+  dinner: Moon,
+  sightseeing: Camera,
+  viewpoint: Mountain, scenic_view: Mountain,
+  fuel: Fuel,
+  accommodation: Hotel, stay: Hotel, 'stay/accommodation': Hotel,
+  activity: Sparkles, attraction: Sparkles,
 };
 
+function StopIcon({ type, size = 20 }) {
+  const Icon = STOP_ICON_COMPONENTS[type] || MapPin;
+  return <Icon size={size} color={C.ACCENT} strokeWidth={2} />;
+}
+
 const CATEGORY_COLORS = {
-  budget: '#166534',
-  'mid-range': '#1e3a5f',
-  average: '#1e3a5f',
+  budget: C.SAGE_BG,
+  'mid-range': C.CARD_ALT,
+  average: C.CARD_ALT,
   luxury: '#4c1d95',
-  free: '#1e293b',
+  free: C.CARD,
 };
 
 const VOICE_STYLE = {
-  idle:       { bg: '#4f1d96', border: '#7c3aed' },
+  idle:       { bg: C.PRIMARY, border: C.PRIMARY },
   listening:  { bg: '#7f1d1d', border: '#ef4444' },
-  processing: { bg: '#1e293b', border: '#475569' },
-  done:       { bg: '#14532d', border: '#22c55e' },
+  processing: { bg: C.CARD, border: '#475569' },
+  done:       { bg: C.SAGE_BG, border: C.SAGE },
   error:      { bg: '#7f1d1d', border: '#ef4444' },
 };
+
+// Returns the index of the first stop whose time >= now, or -1 if all passed
+function findNextStopIndex(dayStops) {
+  const now = new Date();
+  const nowMins = now.getHours() * 60 + now.getMinutes();
+  for (let i = 0; i < dayStops.length; i++) {
+    const t = dayStops[i].suggested_time;
+    if (!t) continue;
+    const parts = t.split(':').map(Number);
+    if (parts[0] * 60 + parts[1] >= nowMins) return i;
+  }
+  return -1;
+}
 
 // Extract day number from a spoken phrase like "Day 1", "second day", "two", "day two"
 function extractDayNumber(text) {
@@ -168,15 +187,57 @@ export default function TripPlanScreen({ route, navigation }) {
   const voiceResetTimer = useRef(null);
   const clarificationRef = useRef(null);
 
+  // Pulsing glow animation for the next upcoming stop card
+  const pulseAnim = useRef(new Animated.Value(0.2)).current;
+  // Voice button color transition (0=idle, 1=listening, 2=processing, 3=done, 4=error)
+  const voiceColorAnim = useRef(new Animated.Value(0)).current;
+  // Pulsing ring around mic while listening
+  const ringAnim = useRef(new Animated.Value(0)).current;
+
   useEffect(() => {
     if (!initialPlan) loadPlan();
     loadTrip();
     return () => {
       if (voiceResetTimer.current) clearTimeout(voiceResetTimer.current);
-      // Stop wake word loop on unmount
       wakeRef.current?.injectJavaScript('window.pauseWake(); true;');
     };
   }, []);
+
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1, duration: 900, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 0.15, duration: 900, useNativeDriver: true }),
+      ])
+    );
+    anim.start();
+    return () => anim.stop();
+  }, []);
+
+  // Smooth 250ms color cross-fade between voice states
+  useEffect(() => {
+    const idx = { idle: 0, listening: 1, processing: 2, done: 3, error: 4 }[voiceState] ?? 0;
+    Animated.timing(voiceColorAnim, {
+      toValue: idx,
+      duration: 250,
+      useNativeDriver: false,
+    }).start();
+  }, [voiceState]);
+
+  // Pulsing ring — looping while listening, resets otherwise
+  useEffect(() => {
+    if (voiceState === 'listening') {
+      const loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(ringAnim, { toValue: 1, duration: 1000, useNativeDriver: true }),
+          Animated.timing(ringAnim, { toValue: 0, duration: 600, useNativeDriver: true }),
+        ])
+      );
+      loop.start();
+      return () => { loop.stop(); ringAnim.setValue(0); };
+    }
+    ringAnim.setValue(0);
+  }, [voiceState]);
 
   const loadPlan = async () => {
     try {
@@ -201,14 +262,11 @@ export default function TripPlanScreen({ route, navigation }) {
     try { data = JSON.parse(event.nativeEvent.data); } catch (_) { return; }
 
     if (data.type === 'wake') {
-      // Ignore if already busy
       if (voiceState === 'processing' || voiceState === 'listening') return;
-      // Pause wake listener so it doesn't grab the mic during command
       wakeRef.current?.injectJavaScript('window.pauseWake(); true;');
       setPartialText('');
       setVoiceResult('');
       setVoiceState('listening');
-      // Speak confirmation, then start command recognition in onDone
       Speech.speak('Yes, I am listening', {
         language: 'en-IN',
         onDone: () => speechRef.current?.injectJavaScript('window.startRecognition(); true;'),
@@ -220,12 +278,10 @@ export default function TripPlanScreen({ route, navigation }) {
 
   const startListening = () => {
     if (voiceState === 'processing' || voiceState === 'listening') return;
-    // Pause wake word so it doesn't compete for the mic
     wakeRef.current?.injectJavaScript('window.pauseWake(); true;');
     setPartialText('');
     setVoiceResult('');
     setVoiceState('listening');
-    // Start recognition only after TTS finishes — prevents mic capturing "Listening"
     Speech.speak('Listening', {
       language: 'en-IN',
       onDone: () => speechRef.current?.injectJavaScript('window.startRecognition(); true;'),
@@ -269,7 +325,6 @@ export default function TripPlanScreen({ route, navigation }) {
         console.log(`[clarify] second turn dayNumber=${dayNumber} pending=${JSON.stringify(pending)}`);
 
         if (dayNumber && pending.new_time) {
-          // Skip Gemini entirely — update DB directly via the type+day endpoint
           setVoiceState('processing');
           try {
             let locationCtx = {};
@@ -334,7 +389,6 @@ export default function TripPlanScreen({ route, navigation }) {
 
       setVoiceState('processing');
       try {
-        // Get GPS location to send with the command for location-aware stop updates
         let locationCtx = {};
         try {
           const { status } = await Location.requestForegroundPermissionsAsync();
@@ -356,7 +410,6 @@ export default function TripPlanScreen({ route, navigation }) {
         const result = await voiceCommand(tripId, commandText, locationCtx);
         console.log(`[clarify] backend returned needs_clarification=${result.needs_clarification} success=${result.success} action=${result.action?.action} updated_stop=${result.updated_stop?.id ?? 'null'}`);
 
-        // Multi-day clarification: Gemini needs to know which day — speak question and re-listen
         if (result.needs_clarification && result.question) {
           clarificationRef.current = result.pending_action;
           console.log(`[clarify] asking day: question="${result.question}" pending=${JSON.stringify(result.pending_action)}`);
@@ -370,7 +423,6 @@ export default function TripPlanScreen({ route, navigation }) {
               speechRef.current?.injectJavaScript('window.startRecognition(); true;');
             },
           });
-          // 15s abort — if user doesn't answer, cancel clarification and go idle
           if (voiceResetTimer.current) clearTimeout(voiceResetTimer.current);
           voiceResetTimer.current = setTimeout(() => {
             clarificationRef.current = null;
@@ -466,7 +518,6 @@ export default function TripPlanScreen({ route, navigation }) {
       setVoiceResult('');
       setPartialText('');
       setClarificationPrompt('');
-      // Resume wake word listener now that mic is free
       wakeRef.current?.injectJavaScript('window.resumeWake(); true;');
     }, 4000);
   };
@@ -479,8 +530,7 @@ export default function TripPlanScreen({ route, navigation }) {
 
   // ── Stop card ────────────────────────────────────────────────────────────────
 
-  const renderStop = (stop, index) => {
-    const icon = STOP_ICONS[stop.stop_type] || '📍';
+  const renderStop = (stop, index, isNext, isLast) => {
     const notes = stop.notes?.split('|') || [];
     const location = notes[0]?.trim();
     const description = notes[1]?.trim();
@@ -489,40 +539,59 @@ export default function TripPlanScreen({ route, navigation }) {
       : 'budget';
 
     return (
-      <View key={stop.id || index} style={styles.stopCard}>
-        <View style={styles.stopHeader}>
-          <View style={styles.timeContainer}>
-            <Text style={styles.stopIcon}>{icon}</Text>
-            <Text style={styles.stopTime}>{stop.suggested_time?.slice(0, 5)}</Text>
-          </View>
-          <View style={styles.stopInfo}>
-            <Text style={styles.stopType}>
-              {stop.stop_type?.charAt(0).toUpperCase() + stop.stop_type?.slice(1)}
-            </Text>
-            <Text style={styles.stopLocation}>{location}</Text>
-          </View>
-          <View style={[styles.categoryBadge,
-            { backgroundColor: CATEGORY_COLORS[category] || '#1e293b' }
-          ]}>
-            <Text style={styles.categoryText}>{category}</Text>
-          </View>
+      <View key={stop.id || index} style={styles.stopWrapper}>
+
+        {/* Timeline column: dot + dashed connecting line */}
+        <View style={styles.timelineCol}>
+          <View style={[styles.timelineDot, isNext && styles.timelineDotNext]} />
+          {!isLast && <View style={styles.timelineLine} />}
         </View>
 
-        {description ? (
-          <Text style={styles.stopDescription}>{description}</Text>
-        ) : null}
+        {/* Card */}
+        <View style={[styles.stopCard, isNext && styles.stopCardNext]}>
+          {/* Pulsing glow border overlay — only on the next upcoming stop */}
+          {isNext && (
+            <Animated.View
+              style={[styles.glowBorder, { opacity: pulseAnim }]}
+              pointerEvents="none"
+            />
+          )}
 
-        {stop.nearby_places?.length > 0 && (
-          <View style={styles.nearbyContainer}>
-            <Text style={styles.nearbyTitle}>📍 Nearby Places</Text>
-            {stop.nearby_places.map((place, i) => (
-              <View key={i} style={styles.placeRow}>
-                <Text style={styles.placeName}>{place.name}</Text>
-                <Text style={styles.placeScore}>⭐ {place.final_score}</Text>
-              </View>
-            ))}
+          <View style={styles.stopHeader}>
+            <View style={styles.timeContainer}>
+              <StopIcon type={stop.stop_type} />
+              <Text style={styles.stopTime}>{stop.suggested_time?.slice(0, 5)}</Text>
+            </View>
+            <View style={styles.stopInfo}>
+              <Text style={styles.stopType}>
+                {stop.stop_type?.charAt(0).toUpperCase() + stop.stop_type?.slice(1)}
+              </Text>
+              <Text style={styles.stopLocation}>{location}</Text>
+            </View>
+            <View style={[styles.categoryBadge,
+              { backgroundColor: CATEGORY_COLORS[category] || C.CARD }
+            ]}>
+              <Text style={styles.categoryText}>{category}</Text>
+            </View>
           </View>
-        )}
+
+          {description ? (
+            <Text style={styles.stopDescription}>{description}</Text>
+          ) : null}
+
+          {stop.nearby_places?.length > 0 && (
+            <View style={styles.nearbyContainer}>
+              <Text style={styles.nearbyTitle}>📍 Nearby Places</Text>
+              {stop.nearby_places.map((place, i) => (
+                <View key={i} style={styles.placeRow}>
+                  <Text style={styles.placeName}>{place.name}</Text>
+                  <Text style={styles.placeScore}>⭐ {place.final_score}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+
       </View>
     );
   };
@@ -533,7 +602,7 @@ export default function TripPlanScreen({ route, navigation }) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator color="#f97316" size="large" />
+          <ActivityIndicator color={C.PRIMARY} size="large" />
           <Text style={styles.loadingText}>Generating your trip plan...</Text>
           <Text style={styles.loadingSubtext}>Finding best stops along the route</Text>
         </View>
@@ -542,7 +611,28 @@ export default function TripPlanScreen({ route, navigation }) {
   }
 
   const stops = plan?.stops || [];
-  const vs = VOICE_STYLE[voiceState];
+  const animatedVoiceBg = voiceColorAnim.interpolate({
+    inputRange: [0, 1, 2, 3, 4],
+    outputRange: [
+      VOICE_STYLE.idle.bg,
+      VOICE_STYLE.listening.bg,
+      VOICE_STYLE.processing.bg,
+      VOICE_STYLE.done.bg,
+      VOICE_STYLE.error.bg,
+    ],
+  });
+  const animatedVoiceBorder = voiceColorAnim.interpolate({
+    inputRange: [0, 1, 2, 3, 4],
+    outputRange: [
+      VOICE_STYLE.idle.border,
+      VOICE_STYLE.listening.border,
+      VOICE_STYLE.processing.border,
+      VOICE_STYLE.done.border,
+      VOICE_STYLE.error.border,
+    ],
+  });
+  const ringOpacity = ringAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 0.45, 0] });
+  const ringScale = ringAnim.interpolate({ inputRange: [0, 1], outputRange: [1.0, 1.6] });
 
   return (
     <SafeAreaView style={styles.container}>
@@ -616,32 +706,39 @@ export default function TripPlanScreen({ route, navigation }) {
               tripName: trip?.trip_name || 'Trip',
             })}
           >
-            <Text style={styles.actionBtnText}>🗺️ View Map</Text>
+            <Text style={styles.mapBtnText}>🗺️ View Map</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Voice command button */}
-        <TouchableOpacity
-          style={[
-            styles.voiceBtn,
-            { backgroundColor: vs.bg, borderColor: vs.border },
-            voiceState === 'processing' && styles.voiceBtnDisabled,
-          ]}
-          onPress={handleVoicePress}
-          disabled={voiceState === 'processing'}
-          activeOpacity={0.8}
-        >
-          {voiceState === 'processing' ? (
-            <View style={styles.voiceRow}>
-              <ActivityIndicator color="#94a3b8" size="small" />
-              <Text style={[styles.voiceBtnText, { color: '#94a3b8', marginLeft: 8 }]}>
-                Processing...
-              </Text>
-            </View>
-          ) : (
-            <Text style={styles.voiceBtnText} numberOfLines={2}>{getVoiceLabel()}</Text>
-          )}
-        </TouchableOpacity>
+        {/* Voice command button — animated color + pulsing ring while listening */}
+        <View style={styles.voiceBtnOuter}>
+          <Animated.View
+            style={[styles.voiceRing, { opacity: ringOpacity, transform: [{ scale: ringScale }] }]}
+            pointerEvents="none"
+          />
+          <TouchableOpacity
+            onPress={handleVoicePress}
+            disabled={voiceState === 'processing'}
+            activeOpacity={0.8}
+            style={voiceState === 'processing' ? styles.voiceBtnDisabled : null}
+          >
+            <Animated.View style={[styles.voiceBtn, {
+              backgroundColor: animatedVoiceBg,
+              borderColor: animatedVoiceBorder,
+            }]}>
+              {voiceState === 'processing' ? (
+                <View style={styles.voiceRow}>
+                  <ActivityIndicator color={C.INK_MUTED} size="small" />
+                  <Text style={[styles.voiceBtnText, { color: C.INK_MUTED, marginLeft: 8 }]}>
+                    Processing...
+                  </Text>
+                </View>
+              ) : (
+                <Text style={styles.voiceBtnText} numberOfLines={2}>{getVoiceLabel()}</Text>
+              )}
+            </Animated.View>
+          </TouchableOpacity>
+        </View>
 
         {clarificationPrompt ? (
           <View style={styles.clarificationBanner}>
@@ -657,17 +754,20 @@ export default function TripPlanScreen({ route, navigation }) {
           Your Trip Plan ({stops.length} stops)
         </Text>
 
-        {Array.from(new Set(stops.map(s => s.day_number || 1))).sort().map(day => (
-          <View key={day}>
-            <View style={styles.dayHeader}>
-              <Text style={styles.dayTitle}>📅 Day {day}</Text>
+        {Array.from(new Set(stops.map(s => s.day_number || 1))).sort().map(day => {
+          const dayStops = stops.filter(s => (s.day_number || 1) === day);
+          const nextIndex = findNextStopIndex(dayStops);
+          return (
+            <View key={day}>
+              <View style={styles.dayHeader}>
+                <Text style={styles.dayTitle}>📅 Day {day}</Text>
+              </View>
+              {dayStops.map((stop, index) =>
+                renderStop(stop, index, index === nextIndex, index === dayStops.length - 1)
+              )}
             </View>
-            {stops
-              .filter(s => (s.day_number || 1) === day)
-              .map((stop, index) => renderStop(stop, index))
-            }
-          </View>
-        ))}
+          );
+        })}
 
       </ScrollView>
 
@@ -681,80 +781,148 @@ export default function TripPlanScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a' },
+  container: { flex: 1, backgroundColor: C.BG },
   hiddenWebView: { height: 1, width: 1, position: 'absolute', opacity: 0 },
   inner: { padding: 20, paddingBottom: 40 },
-  back: { color: '#f97316', fontSize: 16, marginBottom: 16 },
+  back: { color: C.PRIMARY, fontSize: 16, fontFamily: FONTS.body, marginBottom: 16 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  loadingText: { color: '#fff', fontSize: 18, fontWeight: 'bold', marginTop: 20 },
-  loadingSubtext: { color: '#94a3b8', fontSize: 14, marginTop: 8 },
+  loadingText: { color: C.INK, fontSize: 18, fontFamily: FONTS.display, marginTop: 20 },
+  loadingSubtext: { color: C.INK_MUTED, fontSize: 14, fontFamily: FONTS.body, marginTop: 8 },
   tripHeader: {
-    backgroundColor: '#1e293b', borderRadius: 12,
-    padding: 16, marginBottom: 20
+    backgroundColor: C.CARD, borderRadius: 12,
+    padding: 16, marginBottom: 20,
+    ...SHADOWS.sm,
   },
-  tripName: { color: '#fff', fontSize: 20, fontWeight: 'bold', marginBottom: 4 },
-  tripRoute: { color: '#f97316', fontSize: 15, marginBottom: 4 },
-  tripMeta: { color: '#94a3b8', fontSize: 13 },
-  sectionTitle: { color: '#94a3b8', fontSize: 13, marginBottom: 16 },
+  tripName: { color: C.INK, fontSize: 20, fontFamily: FONTS.display, marginBottom: 4 },
+  tripRoute: { color: C.ACCENT, fontSize: 15, fontFamily: FONTS.body, marginBottom: 4 },
+  tripMeta: { color: C.INK_MUTED, fontSize: 13, fontFamily: FONTS.body },
+  sectionTitle: { color: C.INK_MUTED, fontSize: 13, fontFamily: FONTS.body, marginBottom: 16 },
+
+  // ── Timeline row ──────────────────────────────────────────────────────────
+  stopWrapper: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    marginBottom: 14,
+  },
+  timelineCol: {
+    width: 22,
+    alignItems: 'center',
+    paddingTop: 16,
+  },
+  timelineDot: {
+    width: 10, height: 10, borderRadius: 5,
+    backgroundColor: C.PRIMARY,
+    opacity: 0.55,
+  },
+  timelineDotNext: {
+    width: 14, height: 14, borderRadius: 7,
+    opacity: 1,
+    shadowColor: C.PRIMARY,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  timelineLine: {
+    flex: 1,
+    width: 2,
+    borderStyle: 'dashed',
+    borderLeftWidth: 2,
+    borderLeftColor: C.PRIMARY,
+    opacity: 0.35,
+    marginTop: 5,
+  },
+
+  // ── Stop card ─────────────────────────────────────────────────────────────
   stopCard: {
-    backgroundColor: '#1e293b', borderRadius: 12,
-    padding: 14, marginBottom: 12, borderLeftWidth: 3, borderLeftColor: '#f97316'
+    flex: 1,
+    backgroundColor: C.CARD,
+    borderRadius: 12,
+    padding: 18,
+    marginLeft: 8,
+    borderWidth: 1,
+    borderColor: C.BORDER,
+    ...SHADOWS.sm,
   },
+  stopCardNext: {
+    ...SHADOWS.md,
+  },
+  // Pulsing terracotta glow border — absolutely positioned over the card
+  glowBorder: {
+    position: 'absolute',
+    top: -1.5, left: -1.5, right: -1.5, bottom: -1.5,
+    borderRadius: 13.5,
+    borderWidth: 2,
+    borderColor: C.PRIMARY,
+  },
+
   stopHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   timeContainer: { alignItems: 'center', marginRight: 12, minWidth: 44 },
-  stopIcon: { fontSize: 20 },
-  stopTime: { color: '#f97316', fontSize: 12, fontWeight: 'bold', marginTop: 2 },
+  stopTime: { color: C.ACCENT, fontSize: 12, fontFamily: FONTS.bodyBold, marginTop: 4 },
   stopInfo: { flex: 1 },
-  stopType: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
-  stopLocation: { color: '#94a3b8', fontSize: 12, marginTop: 2 },
+  stopType: { color: C.INK, fontSize: 15, fontFamily: FONTS.bodyBold },
+  stopLocation: { color: C.INK_MUTED, fontSize: 12, fontFamily: FONTS.body, marginTop: 2 },
   categoryBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
-  categoryText: { color: '#fff', fontSize: 10 },
-  stopDescription: { color: '#cbd5e1', fontSize: 13, lineHeight: 18, marginBottom: 8 },
-  nearbyContainer: { borderTopWidth: 1, borderTopColor: '#334155', paddingTop: 10 },
-  nearbyTitle: { color: '#94a3b8', fontSize: 12, marginBottom: 6 },
+  categoryText: { color: C.INK, fontSize: 10, fontFamily: FONTS.body },
+  stopDescription: { color: C.INK_MUTED, fontSize: 13, fontFamily: FONTS.body, lineHeight: 18, marginBottom: 8 },
+  nearbyContainer: { borderTopWidth: 1, borderTopColor: C.BORDER, paddingTop: 10 },
+  nearbyTitle: { color: C.INK_MUTED, fontSize: 12, fontFamily: FONTS.body, marginBottom: 6 },
   placeRow: {
     flexDirection: 'row', justifyContent: 'space-between',
     alignItems: 'center', marginBottom: 4
   },
-  placeName: { color: '#fff', fontSize: 13, flex: 1 },
-  placeScore: { color: '#f97316', fontSize: 12 },
+  placeName: { color: C.INK, fontSize: 13, fontFamily: FONTS.body, flex: 1 },
+  placeScore: { color: C.ACCENT, fontSize: 12, fontFamily: FONTS.body },
+
   actionRow: { flexDirection: 'row', gap: 10, marginBottom: 10 },
   actionBtn: { flex: 1, borderRadius: 12, padding: 14, alignItems: 'center' },
   liveBtn: { backgroundColor: '#16a34a' },
-  mapBtn: { backgroundColor: '#1e3a5f', borderWidth: 1, borderColor: '#f97316' },
-  actionBtnText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
+  mapBtn: { backgroundColor: C.CARD_ALT, borderWidth: 1, borderColor: C.PRIMARY },
+  actionBtnText: { color: '#fff', fontSize: 14, fontFamily: FONTS.bodyBold },
+  mapBtnText: { color: C.INK, fontSize: 14, fontFamily: FONTS.bodyBold },
+  voiceBtnOuter: {
+    marginBottom: 6,
+    position: 'relative',
+  },
+  voiceRing: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    borderRadius: 12,
+    borderWidth: 2.5,
+    borderColor: '#ef4444',
+  },
   voiceBtn: {
     borderRadius: 12, padding: 14, alignItems: 'center',
-    borderWidth: 1.5, marginBottom: 6, minHeight: 48,
+    borderWidth: 1.5, minHeight: 48,
   },
   voiceBtnDisabled: { opacity: 0.6 },
   voiceRow: { flexDirection: 'row', alignItems: 'center' },
-  voiceBtnText: { color: '#fff', fontSize: 14, fontWeight: 'bold', textAlign: 'center' },
+  voiceBtnText: { color: '#fff', fontSize: 14, fontFamily: FONTS.bodyBold, textAlign: 'center' },
   clarificationBanner: {
-    backgroundColor: '#1e3a5f',
+    backgroundColor: C.CARD_ALT,
     borderRadius: 8,
     padding: 10,
     marginBottom: 6,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#f97316',
+    borderColor: C.PRIMARY,
   },
-  clarificationText: { color: '#f97316', fontSize: 13, fontWeight: 'bold' },
+  clarificationText: { color: C.PRIMARY, fontSize: 13, fontFamily: FONTS.bodyBold },
   voiceHint: {
-    color: '#475569', fontSize: 11, textAlign: 'center',
-    marginBottom: 20, lineHeight: 16,
+    color: C.INK_MUTED, fontSize: 11, fontFamily: FONTS.body,
+    textAlign: 'center', marginBottom: 20, lineHeight: 16,
   },
   dayHeader: {
-    backgroundColor: '#1e3a5f', borderRadius: 8,
+    backgroundColor: C.CARD_ALT, borderRadius: 8,
     padding: 10, marginBottom: 8, marginTop: 8
   },
-  dayTitle: { color: '#f97316', fontSize: 15, fontWeight: 'bold' },
+  dayTitle: { color: C.ACCENT, fontSize: 15, fontFamily: FONTS.bodyBold },
   wakeIndicator: {
-    backgroundColor: '#0f172a',
+    backgroundColor: C.BG,
     paddingVertical: 8,
     alignItems: 'center',
     borderTopWidth: 1,
-    borderTopColor: '#1e293b',
+    borderTopColor: C.CARD,
   },
-  wakeIndicatorText: { color: '#334155', fontSize: 12 },
+  wakeIndicatorText: { color: C.INK_MUTED, fontSize: 12, fontFamily: FONTS.body },
 });

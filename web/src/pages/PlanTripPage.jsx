@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createTrip, generatePlan } from '../api/trips';
+import { C } from '../theme/colors';
 
 const TRIP_TYPES = ['solo', 'family', 'friends', 'boys', 'bachelor'];
 const VEHICLES = ['car', 'bike', 'bus', 'auto'];
@@ -158,37 +159,37 @@ export default function PlanTripPage() {
 }
 
 const styles = {
-  container: { minHeight: '100vh', backgroundColor: '#0f172a' },
+  container: { minHeight: '100vh', backgroundColor: C.BG },
   inner: { maxWidth: 600, margin: '0 auto', padding: '20px 16px 60px' },
-  back: { backgroundColor: 'transparent', color: '#f97316', fontSize: 16, marginBottom: 16 },
-  title: { fontSize: 26, fontWeight: 'bold', color: '#fff', marginBottom: 24 },
-  label: { display: 'block', color: '#94a3b8', fontSize: 13, marginBottom: 6, marginTop: 4 },
+  back: { backgroundColor: 'transparent', color: C.PRIMARY, fontSize: 16, marginBottom: 16 },
+  title: { fontSize: 26, fontWeight: 'bold', color: C.INK, marginBottom: 24 },
+  label: { display: 'block', color: C.INK_MUTED, fontSize: 13, marginBottom: 6, marginTop: 4 },
   input: {
     width: '100%', padding: '13px 16px',
-    backgroundColor: '#1e293b', border: '1px solid #334155',
-    borderRadius: 10, color: '#fff', fontSize: 15,
+    backgroundColor: C.CARD, border: `1px solid ${C.BORDER}`,
+    borderRadius: 10, color: C.INK, fontSize: 15,
     marginBottom: 14, display: 'block'
   },
   chips: { display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
   chip: {
     padding: '8px 18px', borderRadius: 20,
-    backgroundColor: '#1e293b', border: '1px solid #334155',
-    color: '#94a3b8', fontSize: 14
+    backgroundColor: C.CARD, border: `1px solid ${C.BORDER}`,
+    color: C.INK_MUTED, fontSize: 14
   },
   chipActive: {
-    backgroundColor: '#f97316', borderColor: '#f97316', color: '#fff'
+    backgroundColor: C.PRIMARY, borderColor: C.PRIMARY, color: '#fff'
   },
   button: {
     width: '100%', padding: 16, marginTop: 20,
-    backgroundColor: '#f97316', color: '#fff',
+    backgroundColor: C.PRIMARY, color: '#fff',
     borderRadius: 12, fontSize: 16, fontWeight: 'bold'
   },
   error: { color: '#ef4444', marginBottom: 16 },
-  modeDesc: { color: '#64748b', fontSize: 12, marginTop: -8, marginBottom: 14 },
+  modeDesc: { color: C.INK_MUTED, fontSize: 12, marginTop: -8, marginBottom: 14 },
   textarea: {
     width: '100%', padding: '13px 16px',
-    backgroundColor: '#1e293b', border: '1px solid #334155',
-    borderRadius: 10, color: '#fff', fontSize: 14,
+    backgroundColor: C.CARD, border: `1px solid ${C.BORDER}`,
+    borderRadius: 10, color: C.INK, fontSize: 14,
     marginBottom: 14, display: 'block',
     resize: 'vertical', fontFamily: 'inherit',
     boxSizing: 'border-box',
