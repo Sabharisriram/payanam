@@ -5,26 +5,66 @@
 }
 
 body {
-  background-color: #0f172a;
-  color: #fff;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background-color: #F7F8FC;
+  color: #1A1F3A;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   min-height: 100vh;
+}
+
+h1, h2, h3 {
+  font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
 }
 
 input, select, textarea {
   outline: none;
+  font-family: inherit;
 }
 
 button {
   cursor: pointer;
   border: none;
+  font-family: inherit;
 }
 
 a {
   text-decoration: none;
   color: inherit;
 }
+
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+.auth-layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+.auth-hero {
+  flex: 1;
+  background-color: #2D5BE3;
+  padding: 60px 48px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  min-width: 340px;
+  max-width: 480px;
+}
+
+.auth-form-panel {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+  background-color: #F7F8FC;
+}
+
+@media (max-width: 768px) {
+  .auth-layout { flex-direction: column; }
+  .auth-hero { min-width: 0; max-width: none; padding: 40px 24px; }
+  .auth-form-panel { padding: 32px 16px; }
 }

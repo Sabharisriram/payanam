@@ -68,81 +68,91 @@ export default function PlanTripPage() {
         {error && <p style={styles.error}>{error}</p>}
 
         <form onSubmit={handleSubmit}>
-          <label style={styles.label}>Trip Name</label>
-          <input style={styles.input} placeholder="e.g. Coimbatore to Ooty"
-            value={tripName} onChange={(e) => setTripName(e.target.value)} />
 
-          <label style={styles.label}>From</label>
-          <input style={styles.input} placeholder="Starting location"
-            value={startLocation} onChange={(e) => setStartLocation(e.target.value)} />
-
-          <label style={styles.label}>To</label>
-          <input style={styles.input} placeholder="Destination"
-            value={endLocation} onChange={(e) => setEndLocation(e.target.value)} />
-
-          <label style={styles.label}>Date</label>
-          <input style={styles.input} type="date"
-            value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-
-          <label style={styles.label}>Start Time</label>
-          <input style={styles.input} type="time"
-            value={startTime} onChange={(e) => setStartTime(e.target.value)} />
-
-          <label style={styles.label}>Number of Members</label>
-          <input style={styles.input} type="number" min="1" max="20"
-            value={members} onChange={(e) => setMembers(e.target.value)} />
-
-          <label style={styles.label}>Number of Days</label>
-          <input style={styles.input} type="number" min="1" max="30"
-            placeholder="e.g. 2"
-            value={tripDays} onChange={(e) => setTripDays(e.target.value)} />
-
-          <label style={styles.label}>Trip Type</label>
-          <div style={styles.chips}>
-            {TRIP_TYPES.map(t => (
-              <button key={t} type="button"
-                style={{ ...styles.chip, ...(tripType === t ? styles.chipActive : {}) }}
-                onClick={() => setTripType(t)}>
-                {t.charAt(0).toUpperCase() + t.slice(1)}
-              </button>
-            ))}
+          {/* ROUTE */}
+          <div style={styles.sectionCard}>
+            <span style={styles.sectionLabel}>ROUTE</span>
+            <label style={styles.label}>Trip Name</label>
+            <input style={styles.input} placeholder="e.g. Coimbatore to Ooty"
+              value={tripName} onChange={(e) => setTripName(e.target.value)} />
+            <label style={styles.label}>From</label>
+            <input style={styles.input} placeholder="Starting location"
+              value={startLocation} onChange={(e) => setStartLocation(e.target.value)} />
+            <label style={styles.label}>To</label>
+            <input style={{ ...styles.input, marginBottom: 0 }} placeholder="Destination"
+              value={endLocation} onChange={(e) => setEndLocation(e.target.value)} />
           </div>
 
-          <label style={styles.label}>Vehicle</label>
-          <div style={styles.chips}>
-            {VEHICLES.map(v => (
-              <button key={v} type="button"
-                style={{ ...styles.chip, ...(vehicle === v ? styles.chipActive : {}) }}
-                onClick={() => setVehicle(v)}>
-                {v.charAt(0).toUpperCase() + v.slice(1)}
-              </button>
-            ))}
+          {/* SCHEDULE */}
+          <div style={styles.sectionCard}>
+            <span style={styles.sectionLabel}>SCHEDULE</span>
+            <label style={styles.label}>Date</label>
+            <input style={styles.input} type="date"
+              value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+            <label style={styles.label}>Start Time</label>
+            <input style={{ ...styles.input, marginBottom: 0 }} type="time"
+              value={startTime} onChange={(e) => setStartTime(e.target.value)} />
           </div>
 
-          <label style={styles.label}>Planning Mode</label>
-          <div style={styles.chips}>
-            {PLANNING_MODES.map(m => (
-              <button key={m} type="button"
-                style={{ ...styles.chip, ...(planningMode === m ? styles.chipActive : {}) }}
-                onClick={() => setPlanningMode(m)}>
-                {m.charAt(0).toUpperCase() + m.slice(1)}
-              </button>
-            ))}
+          {/* PASSENGERS */}
+          <div style={styles.sectionCard}>
+            <span style={styles.sectionLabel}>PASSENGERS</span>
+            <label style={styles.label}>Number of Members</label>
+            <input style={styles.input} type="number" min="1" max="20"
+              value={members} onChange={(e) => setMembers(e.target.value)} />
+            <label style={styles.label}>Number of Days</label>
+            <input style={{ ...styles.input, marginBottom: 0 }} type="number" min="1" max="30"
+              placeholder="e.g. 2"
+              value={tripDays} onChange={(e) => setTripDays(e.target.value)} />
           </div>
-          <p style={styles.modeDesc}>{MODE_DESCRIPTIONS[planningMode]}</p>
 
-          {planningMode === 'customized' && (
-            <>
-              <label style={styles.label}>Your Places (one per line)</label>
-              <textarea
-                style={styles.textarea}
-                placeholder={'e.g. Pykara Lake, Ooty\nEmerald Dam\nDoddabetta Peak'}
-                value={customPlaces}
-                onChange={(e) => setCustomPlaces(e.target.value)}
-                rows={4}
-              />
-            </>
-          )}
+          {/* PREFERENCES */}
+          <div style={styles.sectionCard}>
+            <span style={styles.sectionLabel}>PREFERENCES</span>
+            <label style={styles.label}>Trip Type</label>
+            <div style={styles.chips}>
+              {TRIP_TYPES.map(t => (
+                <button key={t} type="button"
+                  style={{ ...styles.chip, ...(tripType === t ? styles.chipActive : {}) }}
+                  onClick={() => setTripType(t)}>
+                  {t.charAt(0).toUpperCase() + t.slice(1)}
+                </button>
+              ))}
+            </div>
+            <label style={styles.label}>Vehicle</label>
+            <div style={styles.chips}>
+              {VEHICLES.map(v => (
+                <button key={v} type="button"
+                  style={{ ...styles.chip, ...(vehicle === v ? styles.chipActive : {}) }}
+                  onClick={() => setVehicle(v)}>
+                  {v.charAt(0).toUpperCase() + v.slice(1)}
+                </button>
+              ))}
+            </div>
+            <label style={styles.label}>Planning Mode</label>
+            <div style={styles.chips}>
+              {PLANNING_MODES.map(m => (
+                <button key={m} type="button"
+                  style={{ ...styles.chip, ...(planningMode === m ? styles.chipActive : {}) }}
+                  onClick={() => setPlanningMode(m)}>
+                  {m.charAt(0).toUpperCase() + m.slice(1)}
+                </button>
+              ))}
+            </div>
+            <p style={styles.modeDesc}>{MODE_DESCRIPTIONS[planningMode]}</p>
+            {planningMode === 'customized' && (
+              <>
+                <label style={styles.label}>Your Places (one per line)</label>
+                <textarea
+                  style={{ ...styles.textarea, marginBottom: 0 }}
+                  placeholder={'e.g. Pykara Lake, Ooty\nEmerald Dam\nDoddabetta Peak'}
+                  value={customPlaces}
+                  onChange={(e) => setCustomPlaces(e.target.value)}
+                  rows={4}
+                />
+              </>
+            )}
+          </div>
 
           <button style={styles.button} type="submit" disabled={loading}>
             {loading ? (
@@ -163,32 +173,40 @@ const styles = {
   inner: { maxWidth: 600, margin: '0 auto', padding: '20px 16px 60px' },
   back: { backgroundColor: 'transparent', color: C.PRIMARY, fontSize: 16, marginBottom: 16 },
   title: { fontSize: 26, fontWeight: 'bold', color: C.INK, marginBottom: 24 },
+  sectionCard: {
+    backgroundColor: C.CARD, border: `1px solid ${C.BORDER}`,
+    borderRadius: 12, padding: 20, marginBottom: 16,
+  },
+  sectionLabel: {
+    display: 'block', color: C.PRIMARY, fontSize: 11, fontWeight: '700',
+    letterSpacing: '1px', textTransform: 'uppercase', marginBottom: 14,
+  },
   label: { display: 'block', color: C.INK_MUTED, fontSize: 13, marginBottom: 6, marginTop: 4 },
   input: {
     width: '100%', padding: '13px 16px',
-    backgroundColor: C.CARD, border: `1px solid ${C.BORDER}`,
+    backgroundColor: C.BG, border: `1px solid ${C.BORDER}`,
     borderRadius: 10, color: C.INK, fontSize: 15,
-    marginBottom: 14, display: 'block'
+    marginBottom: 14, display: 'block', boxSizing: 'border-box',
   },
   chips: { display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
   chip: {
     padding: '8px 18px', borderRadius: 20,
     backgroundColor: C.CARD, border: `1px solid ${C.BORDER}`,
-    color: C.INK_MUTED, fontSize: 14
+    color: C.INK_MUTED, fontSize: 14,
   },
   chipActive: {
-    backgroundColor: C.PRIMARY, borderColor: C.PRIMARY, color: '#fff'
+    backgroundColor: C.PRIMARY, borderColor: C.PRIMARY, color: '#fff',
   },
   button: {
     width: '100%', padding: 16, marginTop: 20,
     backgroundColor: C.PRIMARY, color: '#fff',
-    borderRadius: 12, fontSize: 16, fontWeight: 'bold'
+    borderRadius: 12, fontSize: 16, fontWeight: 'bold',
   },
   error: { color: '#ef4444', marginBottom: 16 },
   modeDesc: { color: C.INK_MUTED, fontSize: 12, marginTop: -8, marginBottom: 14 },
   textarea: {
     width: '100%', padding: '13px 16px',
-    backgroundColor: C.CARD, border: `1px solid ${C.BORDER}`,
+    backgroundColor: C.BG, border: `1px solid ${C.BORDER}`,
     borderRadius: 10, color: C.INK, fontSize: 14,
     marginBottom: 14, display: 'block',
     resize: 'vertical', fontFamily: 'inherit',
@@ -196,13 +214,13 @@ const styles = {
   },
   loadingBox: {
     display: 'flex', alignItems: 'center',
-    justifyContent: 'center', gap: 12
+    justifyContent: 'center', gap: 12,
   },
   spinner: {
     width: 20, height: 20,
     border: '3px solid rgba(255,255,255,0.3)',
     borderTop: '3px solid #fff',
     borderRadius: '50%',
-    animation: 'spin 1s linear infinite'
-  }
+    animation: 'spin 1s linear infinite',
+  },
 };

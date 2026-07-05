@@ -238,47 +238,86 @@ Generate EXACTLY 7 stops. Must include: tea, breakfast, sightseeing, lunch, sigh
 For sightseeing stops: use well-known real attraction names relevant to the route.`;
 }
 
-async function interpretVoiceCommand(commandText, trip, stops, locationCtx = null) {
+async function interpretAgentCommand(commandText, trip, stops, locationCtx = null, conversationHistory = []) {
   try {
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
     const stopsContext = stops.map(s => {
       const location = s.notes?.split('|')[0]?.trim() || s.stop_type;
-      return `seq=${s.sequence_order} day=${s.day_number || 1} type=${s.stop_type} time=${s.suggested_time?.slice(0, 5) || '?'} place="${location}"`;
+      const skipped = s.proximity_review_done ? ' [SKIPPED]' : '';
+      return `seq=${s.sequence_order} day=${s.day_number || 1} type=${s.stop_type} time=${s.suggested_time?.slice(0, 5) || '?'} place="${location}"${skipped}`;
     }).join('\n');
 
-    console.log(`[voice/gemini] cmd="${commandText}" stops=${stops.length}`);
-    console.log(`[voice/gemini] stopsContext:\n${stopsContext}`);
+    const locationInfo = locationCtx
+      ? `Current GPS: ${locationCtx.current_lat.toFixed(4)}, ${locationCtx.current_lng.toFixed(4)} | Current time: ${locationCtx.current_time} | Speed: ~${locationCtx.avg_speed_kmh} km/h`
+      : 'Current location: unknown';
+
+    const historyContext = conversationHistory.length > 0
+      ? '\nRECENT CONVERSATION:\n' + conversationHistory.map(h => `${h.role === 'user' ? 'User' : 'Agent'}: ${h.text}`).join('\n')
+      : '';
 
     const tripDays = parseInt(trip.trip_days) || 1;
-    const prompt = `You are a trip assistant for a ${trip.trip_type} road trip from ${trip.start_location} to ${trip.end_location} (${tripDays} day${tripDays > 1 ? 's' : ''}).
 
-Current stops:
+    console.log(`[agent/gemini] cmd="${commandText}" stops=${stops.length} history=${conversationHistory.length}`);
+
+    const prompt = `You are Payanam, an intelligent AI co-driver for a ${trip.trip_type} road trip.
+
+TRIP: ${trip.start_location} → ${trip.end_location} | ${trip.trip_type} | ${trip.vehicle_type} | ${trip.member_count} member(s) | ${tripDays} day(s)
+${locationInfo}
+
+STOPS:
 ${stopsContext}
+${historyContext}
 
-Voice command from user: "${commandText}"
+The traveler just said: "${commandText}"
 
-Interpret this command and reply ONLY with one JSON object — no markdown, no explanation:
+Respond ONLY with one valid JSON object — no markdown, no explanation — using exactly one of these actions:
 
-Update time:  {"understood_command":"...","action":"update_time","stop_sequence":N,"day_number":N,"new_time":"HH:MM"}
-Change place: {"understood_command":"...","action":"change_place","stop_sequence":N,"day_number":N,"stop_type":"...","new_place_name":"Real South India place, City","new_notes":"brief tip","new_price_category":"budget|mid-range|luxury|free"}
-Ask for day:  {"understood_command":"...","action":"ask_day","stop_type":"lunch","pending_change":{"new_time":"14:00"}}
-Unknown:      {"understood_command":"...","action":"unknown","message":"Could not understand"}
+update_time — change a stop's scheduled time
+{"action":"update_time","parameters":{"stop_sequence":N,"day_number":N,"new_time":"HH:MM","stop_type":"..."},"response_text":"spoken confirmation"}
 
-Rules:
-- stop_sequence must be one of the seq= numbers listed above
-- day_number must match the day= value of the matched stop in the list above
-- new_place_name must be a real, specific South India establishment (e.g. "Murugan Idli Shop, Salem" not "a restaurant")
-- If the stop type is clear but no specific place was named, suggest a real appropriate one along the route
-- If this trip has ${tripDays} day(s) and the command mentions a stop type that appears on multiple days WITHOUT specifying which day, use action "ask_day"
-- Day references in commands: "first day" or "day 1" = 1, "second day" or "day 2" = 2, "last day" = ${tripDays}`;
+change_place — swap the place for a stop
+{"action":"change_place","parameters":{"stop_sequence":N,"day_number":N,"stop_type":"...","new_place_name":"Real South India place, City","new_notes":"brief tip","new_price_category":"budget|mid-range|luxury|free"},"response_text":"spoken confirmation"}
+
+skip_stop — mark a stop as skipped/cancelled
+{"action":"skip_stop","parameters":{"stop_sequence":N,"day_number":N,"stop_type":"..."},"response_text":"spoken confirmation"}
+
+add_stop — add a new stop to the plan
+{"action":"add_stop","parameters":{"stop_type":"tea|breakfast|lunch|dinner|sightseeing|fuel|accommodation","time":"HH:MM","day_number":N,"place_name":"Real South India place, City","notes":"brief tip"},"response_text":"spoken confirmation"}
+
+find_nearby — find the nearest place of a type at current GPS location
+{"action":"find_nearby","parameters":{"place_type":"tea|breakfast|lunch|dinner|fuel|hospital|petrol","add_as_stop":true},"response_text":"spoken response about what you're finding"}
+
+answer_question — answer a question about the trip (no DB change)
+{"action":"answer_question","parameters":{},"response_text":"full spoken answer — compute from stops list: remaining count, next stop, ETA estimate, plan summary etc."}
+
+adjust_schedule — push all remaining stops on a day forward or backward
+{"action":"adjust_schedule","parameters":{"day_number":N,"direction":"forward|backward","minutes":N},"response_text":"spoken confirmation"}
+
+summarize_plan — read out remaining stops for a day
+{"action":"summarize_plan","parameters":{"day_number":N},"response_text":"full spoken summary: list each non-skipped stop with its time and place name"}
+
+ask_day — stop type appears on multiple days and user didn't say which one
+{"action":"ask_day","parameters":{"stop_type":"...","pending_change":{"new_time":"HH:MM"}},"response_text":"Which day do you mean? This trip has ${tripDays} days."}
+
+unknown — cannot understand the command
+{"action":"unknown","parameters":{},"response_text":"Sorry, I didn't catch that. Could you say it again?"}
+
+RULES:
+- stop_sequence must be a seq= value from the STOPS list above
+- day_number must match the day= value of that stop
+- place names must be real, specific South India establishments ("Murugan Idli Shop, Salem" not "a restaurant")
+- response_text must be natural spoken language — warm, concise, like a friendly co-driver
+- For answer_question/summarize_plan: derive the answer from the stops data provided
+- Day references: "first day"/"day 1"=1, "second day"/"day 2"=2, "last day"=${tripDays}`;
+
+    console.log(`\n=== AGENT PROMPT ===\n${prompt}\n=== END PROMPT ===\n`);
 
     let result;
     try {
       result = await generateWithRetry(model, prompt);
     } catch (apiErr) {
-      console.error('[voice/gemini] API call failed:', apiErr.message, 'status:', apiErr.status || 'n/a');
-      console.error('[voice/gemini] API stack:', apiErr.stack);
+      console.error('[agent/gemini] API call failed:', apiErr.message, 'status:', apiErr.status || 'n/a');
       throw apiErr;
     }
 
@@ -286,97 +325,75 @@ Rules:
     try {
       rawText = result.response.text();
     } catch (textErr) {
-      console.error('[voice/gemini] response.text() threw:', textErr.message);
-      console.error('[voice/gemini] promptFeedback:', JSON.stringify(result.response?.promptFeedback));
-      console.error('[voice/gemini] stack:', textErr.stack);
+      console.error('[agent/gemini] response.text() threw:', textErr.message);
+      console.error('[agent/gemini] promptFeedback:', JSON.stringify(result.response?.promptFeedback));
       throw textErr;
     }
 
-    console.log(`[voice/gemini] raw response (${rawText?.length} chars):\n${rawText}`);
+    console.log(`[agent/gemini] raw response (${rawText?.length} chars):\n${rawText}`);
 
     const jsonMatch = rawText?.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      console.error('[voice/gemini] no JSON found in response. Full text:', rawText);
+      console.error('[agent/gemini] no JSON found. Full text:', rawText);
       throw new Error(`Gemini response has no JSON. Got: ${rawText?.slice(0, 300)}`);
     }
 
     let parsed;
     try {
       parsed = JSON.parse(jsonMatch[0]);
-      console.log(`[voice/gemini] parsed OK: action=${parsed.action}`);
+      console.log(`[agent/gemini] parsed OK: action=${parsed.action}`);
     } catch (parseErr) {
-      console.error('[voice/gemini] JSON.parse failed.');
-      console.error('[voice/gemini] raw jsonMatch:', jsonMatch[0]);
-      console.error('[voice/gemini] stack:', parseErr.stack);
+      console.error('[agent/gemini] JSON.parse failed on:', jsonMatch[0]);
       throw parseErr;
     }
 
-    // Attach stop_type to the action so the mobile TTS can use it
-    if (parsed.action === 'update_time' && parsed.stop_sequence != null) {
-      console.log(`[loc-debug] update_time: stop_sequence=${parsed.stop_sequence} (type=${typeof parsed.stop_sequence}) new_time=${parsed.new_time}`);
-      console.log(`[loc-debug] locationCtx received:`, JSON.stringify(locationCtx));
+    if (!parsed.action) {
+      console.error(`[agent/gemini] MISSING action field. Full parsed object:`, JSON.stringify(parsed));
+      console.error(`[agent/gemini] Full raw Gemini text was:`, rawText);
+      parsed.action = 'unknown';
+      parsed.response_text = parsed.response_text || "Sorry, I didn't understand that. Could you try again?";
+    }
 
-      const targetStop = stops.find(s => s.sequence_order === parsed.stop_sequence);
-      console.log(`[loc-debug] targetStop lookup (sequence_order match): ${targetStop ? `found type=${targetStop.stop_type}` : 'NOT FOUND'}`);
-      console.log(`[loc-debug] all stop sequence_orders: ${stops.map(s => `${s.sequence_order}(${typeof s.sequence_order})`).join(', ')}`);
-      if (targetStop) parsed.stop_type = targetStop.stop_type;
+    if (!parsed.parameters) parsed.parameters = {};
 
-      // Location-aware: find a real place near where the user will be at new_time
-      if (locationCtx && parsed.new_time) {
-        console.log(`[loc-debug] entering location-aware block. current_time=${locationCtx.current_time} new_time=${parsed.new_time} speed=${locationCtx.avg_speed_kmh}`);
-        try {
-          const futurePos = calcFuturePosition(locationCtx, parsed.new_time, trip, stops);
-          console.log(`[loc-debug] calcFuturePosition result:`, JSON.stringify(futurePos));
-
-          if (!futurePos) {
-            // Log WHY it's null to diagnose
-            const toMins = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
-            const diff = toMins(parsed.new_time) - toMins(locationCtx.current_time);
-            const hasEndCoords = !!(trip.end_lat && trip.end_lng);
-            const stopsWithCoords = stops.filter(s => s.stop_lat && s.stop_lng).length;
-            console.warn(`[loc-debug] futurePos=null. timeDiffMins=${diff} trip.end_lat=${trip.end_lat} trip.end_lng=${trip.end_lng} hasEndCoords=${hasEndCoords} stopsWithCoords=${stopsWithCoords}`);
+    // Location-aware enhancement for update_time: find a real place near the future position
+    if (parsed.action === 'update_time' && parsed.parameters.stop_sequence != null && locationCtx) {
+      const { stop_sequence, new_time } = parsed.parameters;
+      console.log(`[loc-debug] update_time seq=${stop_sequence} new_time=${new_time}`);
+      try {
+        const futurePos = calcFuturePosition(locationCtx, new_time, trip, stops);
+        console.log(`[loc-debug] futurePos:`, JSON.stringify(futurePos));
+        if (futurePos) {
+          const targetStop = stops.find(s => s.sequence_order === stop_sequence);
+          const placeType = STOP_PLACE_TYPE[targetStop?.stop_type] || 'restaurant';
+          console.log(`[loc-debug] findNearbyPlaces lat=${futurePos.lat.toFixed(4)} lng=${futurePos.lng.toFixed(4)} type="${placeType}"`);
+          const nearby = await findNearbyPlaces(futurePos.lat, futurePos.lng, placeType);
+          console.log(`[loc-debug] nearby count=${nearby.length}`);
+          if (nearby.length > 0) {
+            const best = nearby[0];
+            parsed.parameters.location_aware = true;
+            parsed.parameters.new_place_name = best.name;
+            parsed.parameters.new_place_lat = best.lat;
+            parsed.parameters.new_place_lng = best.lng;
+            parsed.parameters.new_price_category = best.price_category || 'budget';
+            console.log(`[loc-debug] ✓ location_aware place="${best.name}"`);
+          } else {
+            console.warn(`[loc-debug] no nearby places found for type="${placeType}"`);
           }
-
-          if (futurePos) {
-            const placeType = STOP_PLACE_TYPE[targetStop?.stop_type] || 'restaurant';
-            console.log(`[loc-debug] calling findNearbyPlaces(lat=${futurePos.lat.toFixed(4)}, lng=${futurePos.lng.toFixed(4)}, placeType="${placeType}")`);
-
-            const nearby = await findNearbyPlaces(futurePos.lat, futurePos.lng, placeType);
-            console.log(`[loc-debug] findNearbyPlaces returned ${nearby.length} results`);
-            if (nearby.length > 0) {
-              console.log(`[loc-debug] top 3 results:`, JSON.stringify(nearby.slice(0, 3).map(p => ({ name: p.name, lat: p.lat, lng: p.lng }))));
-            } else {
-              console.warn(`[loc-debug] Nominatim returned 0 places for placeType="${placeType}" near ${futurePos.lat.toFixed(4)},${futurePos.lng.toFixed(4)}`);
-            }
-
-            if (nearby.length > 0) {
-              const best = nearby[0];
-              parsed.location_aware = true;
-              parsed.new_place_name = best.name;
-              parsed.new_place_lat = best.lat;
-              parsed.new_place_lng = best.lng;
-              parsed.new_price_category = best.price_category || 'budget';
-              console.log(`[loc-debug] ✓ location_aware=true place="${best.name}" @ ${best.lat},${best.lng}`);
-            } else {
-              console.warn(`[loc-debug] ✗ location_aware NOT set — no nearby places found`);
-            }
-          }
-        } catch (locErr) {
-          // Non-fatal — still return the time update without location enhancement
-          console.error('[loc-debug] location enhancement THREW (non-fatal):', locErr.message);
-          console.error('[loc-debug] stack:', locErr.stack);
+        } else {
+          const toMins = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+          console.warn(`[loc-debug] futurePos=null timeDiff=${toMins(new_time) - toMins(locationCtx.current_time)}mins`);
         }
-      } else {
-        console.warn(`[loc-debug] skipping location block: locationCtx=${!!locationCtx} parsed.new_time=${parsed.new_time}`);
+      } catch (locErr) {
+        console.error('[loc-debug] location enhancement failed (non-fatal):', locErr.message);
       }
     }
 
     return parsed;
   } catch (outerErr) {
-    console.error('[voice/gemini] interpretVoiceCommand FAILED at outer level:', outerErr.message);
-    console.error('[voice/gemini] outer stack:', outerErr.stack);
+    console.error('[agent/gemini] interpretAgentCommand FAILED:', outerErr.message, outerErr.stack);
     throw outerErr;
   }
 }
 
-module.exports = { generateTripPlan, interpretVoiceCommand };
+module.exports = { generateTripPlan, interpretAgentCommand };

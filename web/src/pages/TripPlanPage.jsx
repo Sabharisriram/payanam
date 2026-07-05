@@ -371,7 +371,7 @@ const styles = {
     padding: 16, marginBottom: 20
   },
   tripName: { color: C.INK, fontSize: 22, fontWeight: 'bold', marginBottom: 4 },
-  tripRoute: { color: C.ACCENT, fontSize: 15, marginBottom: 4 },
+  tripRoute: { color: C.PRIMARY, fontSize: 15, marginBottom: 4 },
   tripMeta: { color: C.INK_MUTED, fontSize: 13 },
   planRow: {
     display: 'flex', alignItems: 'center',
@@ -401,7 +401,7 @@ const styles = {
     backgroundColor: C.CARD_ALT, borderRadius: 8,
     padding: '10px 14px', marginBottom: 8, marginTop: 16
   },
-  dayTitle: { color: C.ACCENT, fontSize: 15, fontWeight: 'bold' },
+  dayTitle: { color: C.PRIMARY, fontSize: 15, fontWeight: 'bold' },
 
   // ── Timeline row ──────────────────────────────────────────────────────────
   stopWrapper: {
@@ -449,7 +449,8 @@ const styles = {
     backgroundColor: C.CARD, borderRadius: 12,
     padding: 14,
     marginLeft: 8,
-    border: '1.5px solid transparent',
+    border: `1px solid ${C.BORDER}`,
+    boxShadow: '0 1px 6px rgba(0,0,0,0.07)',
   },
   stopHeader: { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 },
   timeBox: { display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 44 },

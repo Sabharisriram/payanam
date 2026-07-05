@@ -4,6 +4,7 @@ import {
   SafeAreaView, Alert, ScrollView
 } from 'react-native';
 import * as Location from 'expo-location';
+import * as Speech from 'expo-speech';
 import { io } from 'socket.io-client';
 import {
   Coffee, UtensilsCrossed, Moon, Camera, Mountain,
@@ -48,6 +49,13 @@ export default function LiveTripScreen({ route, navigation }) {
   const stopsRef = useRef([]);
   const shownStopIds = useRef(new Set());
   const inTripRatings = useRef({});
+  const isSpeakingRef = useRef(false);
+  const locationRef = useRef(null);
+  const speedRef = useRef(0);
+  const prevDistancesRef = useRef(new Map());
+  const alertedApproachIds = useRef(new Set());
+  const alertedLateIds = useRef(new Set());
+  const alertedPassedIds = useRef(new Set());
 
   useEffect(() => {
     loadStops();
@@ -55,6 +63,80 @@ export default function LiveTripScreen({ route, navigation }) {
       stopTracking();
     };
   }, []);
+
+  // Proactive voice alerts — runs every 2 minutes while tracking is active
+  useEffect(() => {
+    if (!isTracking) return;
+
+    const intervalId = setInterval(() => {
+      if (isSpeakingRef.current) return;
+      if (!locationRef.current) return;
+
+      const { lat, lng } = locationRef.current;
+      const speedKmh = speedRef.current;
+      const now = new Date();
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+      // Compute current distances for all stops with coords
+      const currentDists = new Map();
+      for (const stop of stopsRef.current) {
+        if (stop.stop_lat && stop.stop_lng) {
+          currentDists.set(stop.id, parseFloat(calculateDistance(lat, lng, stop.stop_lat, stop.stop_lng)));
+        }
+      }
+
+      let alertMsg = null;
+      for (const stop of stopsRef.current) {
+        if (alertMsg) break;
+        const isVisited = !!(stop.visited_at || stop.proximity_review_done);
+        const placeName = stop.notes?.split('|')[0]?.trim() || stop.stop_type;
+        const dist = currentDists.get(stop.id);
+        const prevDist = prevDistancesRef.current.get(stop.id);
+
+        // Alert 1: Approaching (<2km, speed >5, reviewable food stop)
+        if (
+          dist !== undefined && dist < 2 && speedKmh > 5 && !isVisited &&
+          ['tea', 'breakfast', 'lunch', 'dinner', 'snack'].includes(stop.stop_type) &&
+          !alertedApproachIds.current.has(stop.id)
+        ) {
+          alertedApproachIds.current.add(stop.id);
+          alertMsg = `You are approaching ${placeName}. Get ready for your ${stop.stop_type} stop.`;
+          break;
+        }
+
+        // Alert 2: Behind schedule (>20 min past suggested_time, not visited)
+        if (!isVisited && stop.suggested_time && !alertedLateIds.current.has(stop.id)) {
+          const [h, m] = stop.suggested_time.split(':').map(Number);
+          if (currentMinutes > h * 60 + m + 20) {
+            alertedLateIds.current.add(stop.id);
+            alertMsg = `You are running late on your ${stop.stop_type} stop at ${placeName}. Want me to adjust the schedule? Just say adjust schedule.`;
+            break;
+          }
+        }
+
+        // Alert 3: Passed stop (was <3km, now >5km, not visited)
+        if (
+          dist !== undefined && prevDist !== undefined &&
+          prevDist < 3 && dist > 5 && !isVisited &&
+          !alertedPassedIds.current.has(stop.id)
+        ) {
+          alertedPassedIds.current.add(stop.id);
+          alertMsg = `Looks like you passed your ${stop.stop_type} stop. Say find nearby ${stop.stop_type} to find an alternative.`;
+          break;
+        }
+      }
+
+      // Update prev distances after checks
+      currentDists.forEach((dist, stopId) => prevDistancesRef.current.set(stopId, dist));
+
+      if (alertMsg) {
+        isSpeakingRef.current = true;
+        Speech.speak(alertMsg, { language: 'en-IN', onDone: () => { isSpeakingRef.current = false; } });
+      }
+    }, 2 * 60 * 1000);
+
+    return () => clearInterval(intervalId);
+  }, [isTracking]);
 
   const loadStops = async () => {
     try {
@@ -88,6 +170,8 @@ export default function LiveTripScreen({ route, navigation }) {
       },
       (location) => {
         const { latitude, longitude } = location.coords;
+        locationRef.current = { lat: latitude, lng: longitude };
+        speedRef.current = (location.coords.speed ?? 0) * 3.6;
         setCurrentLocation({ lat: latitude, lng: longitude });
 
         socketRef.current?.emit('location_update', {

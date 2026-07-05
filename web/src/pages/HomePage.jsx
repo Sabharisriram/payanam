@@ -53,9 +53,14 @@ export default function HomePage() {
           <button style={styles.logoutBtn} onClick={handleLogout}>Logout</button>
         </div>
 
-        <button style={styles.planBtn} onClick={() => navigate('/plan')}>
-          + Plan a New Trip
-        </button>
+        <div style={styles.heroCard}>
+          <div style={styles.heroCircle1} />
+          <div style={styles.heroCircle2} />
+          <p style={styles.heroTagline}>Ready for your next journey?</p>
+          <button style={styles.heroBtn} onClick={() => navigate('/plan')}>
+            + Plan a New Trip
+          </button>
+        </div>
 
         <p style={styles.sectionTitle}>Your Trips</p>
 
@@ -111,11 +116,25 @@ const styles = {
     fontSize: 14, padding: '8px 16px',
     border: `1px solid ${C.PRIMARY}`, borderRadius: 8
   },
-  planBtn: {
-    width: '100%', padding: 16,
-    backgroundColor: C.PRIMARY, color: '#fff',
-    borderRadius: 12, fontSize: 16,
-    fontWeight: 'bold', marginBottom: 24
+  heroCard: {
+    backgroundColor: C.PRIMARY, height: 140, borderRadius: 16,
+    marginBottom: 24, padding: 20, overflow: 'hidden',
+    display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+    position: 'relative',
+  },
+  heroCircle1: {
+    position: 'absolute', width: 160, height: 160, borderRadius: '50%',
+    backgroundColor: 'rgba(255,255,255,0.10)', top: -45, right: -30, pointerEvents: 'none',
+  },
+  heroCircle2: {
+    position: 'absolute', width: 90, height: 90, borderRadius: '50%',
+    backgroundColor: 'rgba(255,255,255,0.06)', bottom: -25, right: 90, pointerEvents: 'none',
+  },
+  heroTagline: { color: '#fff', fontSize: 18, fontWeight: '600', position: 'relative' },
+  heroBtn: {
+    backgroundColor: '#fff', color: C.PRIMARY, borderRadius: 10,
+    padding: '10px 16px', fontSize: 14, fontWeight: 'bold',
+    alignSelf: 'flex-start', position: 'relative',
   },
   sectionTitle: { color: C.INK_MUTED, fontSize: 13, marginBottom: 12 },
   tripCard: {
@@ -124,7 +143,7 @@ const styles = {
     borderLeft: `3px solid ${C.PRIMARY}`
   },
   tripName: { color: C.INK, fontSize: 17, marginBottom: 4 },
-  tripRoute: { color: C.ACCENT, fontSize: 14, marginBottom: 4 },
+  tripRoute: { color: C.PRIMARY, fontSize: 14, marginBottom: 4 },
   tripMeta: { color: C.INK_MUTED, fontSize: 12, marginBottom: 8 },
   cardFooter: { display: 'flex', alignItems: 'center', gap: 10 },
   badge: {

@@ -39,10 +39,10 @@ export const completeTrip = async (tripId) => {
   return response.data;
 };
 
-export const voiceCommand = async (tripId, commandText, locationCtx = {}) => {
+export const voiceCommand = async (tripId, commandText, locationCtx = {}, conversationHistory = []) => {
   const response = await client.post(
     `/trips/${tripId}/voice-command`,
-    { command: commandText, ...locationCtx },
+    { command: commandText, ...locationCtx, conversationHistory },
     { timeout: 30000 }
   );
   return response.data;

@@ -182,6 +182,7 @@ export default function TripPlanScreen({ route, navigation }) {
   const [voiceResult, setVoiceResult] = useState('');
   const [partialText, setPartialText] = useState('');
   const [clarificationPrompt, setClarificationPrompt] = useState('');
+  const [conversationHistory, setConversationHistory] = useState([]);
   const speechRef = useRef(null);
   const wakeRef = useRef(null);
   const voiceResetTimer = useRef(null);
@@ -406,9 +407,21 @@ export default function TripPlanScreen({ route, navigation }) {
           }
         } catch (_) { /* location unavailable — proceed without it */ }
 
-        console.log(`[clarify] sending to backend commandText="${commandText}"`);
-        const result = await voiceCommand(tripId, commandText, locationCtx);
-        console.log(`[clarify] backend returned needs_clarification=${result.needs_clarification} success=${result.success} action=${result.action?.action} updated_stop=${result.updated_stop?.id ?? 'null'}`);
+        // Append user turn to history, then send history with request
+        const userTurn = { role: 'user', text: commandText, timestamp: Date.now() };
+        const historyToSend = [...conversationHistory, userTurn];
+        setConversationHistory(historyToSend.slice(-6));
+
+        console.log(`[agent] sending commandText="${commandText}" history=${historyToSend.length}`);
+        const result = await voiceCommand(tripId, commandText, locationCtx, historyToSend.slice(-3));
+        console.log(`[agent] action=${result.action} success=${result.success}`);
+
+        // Append assistant turn to history
+        if (result.response_text) {
+          setConversationHistory(prev =>
+            [...prev, { role: 'assistant', text: result.response_text, timestamp: Date.now() }].slice(-6)
+          );
+        }
 
         if (result.needs_clarification && result.question) {
           clarificationRef.current = result.pending_action;
@@ -435,39 +448,29 @@ export default function TripPlanScreen({ route, navigation }) {
           return;
         }
 
-        if (result.success && result.updated_stop) {
-          setVoiceResult(`✓  ${result.understood_command}`);
+        if (result.success) {
+          setVoiceResult(`✓  ${result.response_text || 'Done'}`);
           setVoiceState('done');
-          setPlan(prev => {
-            const newStops = (prev?.stops || []).map(s =>
-              s.id === result.updated_stop.id ? { ...s, ...result.updated_stop } : s
-            );
-            return { ...(prev || {}), stops: newStops };
-          });
-          const a = result.action;
-          let ttsMsg;
-          if (a?.action === 'update_time') {
-            if (a.location_aware && a.new_place_name) {
-              ttsMsg = `Done! Changed your ${a.stop_type || 'stop'} to ${a.new_time} at ${a.new_place_name}.`;
-            } else {
-              ttsMsg = `Done! Changed your ${a.stop_type || 'stop'} time to ${a.new_time || 'the new time'}.`;
-            }
-          } else if (a?.action === 'change_place') {
-            ttsMsg = `Done! Changed your ${a.stop_type || 'stop'} stop to ${a.new_place_name || 'the new place'}.`;
-          } else {
-            ttsMsg = `Done! ${result.understood_command || 'Your trip has been updated.'}`;
+          if (result.updated_stop) {
+            setPlan(prev => ({
+              ...(prev || {}),
+              stops: (prev?.stops || []).map(s =>
+                s.id === result.updated_stop.id ? { ...s, ...result.updated_stop } : s
+              ),
+            }));
           }
-          Speech.speak(ttsMsg, { language: 'en-IN' });
-          scheduleVoiceReset();
-        } else if (result.success) {
-          setVoiceResult(`✓  ${result.understood_command}`);
-          setVoiceState('done');
-          Speech.speak(`Done! ${result.understood_command || 'Your trip has been updated.'}`, { language: 'en-IN' });
+          if (result.new_stop) {
+            setPlan(prev => ({
+              ...(prev || {}),
+              stops: [...(prev?.stops || []), result.new_stop],
+            }));
+          }
+          Speech.speak(result.response_text || 'Done!', { language: 'en-IN' });
           scheduleVoiceReset();
         } else {
-          setVoiceResult(`?  ${result.understood_command || 'Could not understand'}`);
+          setVoiceResult(`?  ${result.response_text || 'Could not understand'}`);
           setVoiceState('error');
-          Speech.speak("Sorry, I couldn't understand. Please try again.", { language: 'en-IN' });
+          Speech.speak(result.response_text || "Sorry, I couldn't understand. Please try again.", { language: 'en-IN' });
           scheduleVoiceReset();
         }
       } catch (err) {
@@ -750,6 +753,16 @@ export default function TripPlanScreen({ route, navigation }) {
           Say "Payanam" to activate  ·  or tap  ·  "Change tea time to 8am"
         </Text>
 
+        {(() => {
+          const lastAssistant = [...conversationHistory].reverse().find(h => h.role === 'assistant');
+          if (!lastAssistant) return null;
+          return (
+            <View style={styles.lastReplyBubble}>
+              <Text style={styles.lastReplyText} numberOfLines={2}>💬 {lastAssistant.text}</Text>
+            </View>
+          );
+        })()}
+
         <Text style={styles.sectionTitle}>
           Your Trip Plan ({stops.length} stops)
         </Text>
@@ -925,4 +938,19 @@ const styles = StyleSheet.create({
     borderTopColor: C.CARD,
   },
   wakeIndicatorText: { color: C.INK_MUTED, fontSize: 12, fontFamily: FONTS.body },
+  lastReplyBubble: {
+    backgroundColor: C.CARD_ALT,
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 4,
+    marginBottom: 16,
+    borderLeftWidth: 3,
+    borderLeftColor: C.PRIMARY,
+  },
+  lastReplyText: {
+    color: C.INK_MUTED,
+    fontSize: 12,
+    fontFamily: FONTS.body,
+    lineHeight: 18,
+  },
 });
